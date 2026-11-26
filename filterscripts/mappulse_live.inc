@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_live.inc | MapPulse v0.9.0
+ * mappulse_live.inc | MapPulse v1.0.0
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
 #if MPL_USE_PAWNCMD
     #include <Pawn.CMD>
 #endif
-#define MPL_BUILD_CODE (9000)
+#define MPL_BUILD_CODE (1000000)
 new bool:MPL_Ready;
 new MPL_Active[MAX_PLAYERS], MPL_ActiveIndex[MAX_PLAYERS], MPL_ActiveCount;
 new MPL_SampleTotal, MPL_PollTotal, MPL_PollPeak, MPL_PollLimited;
@@ -116,6 +116,58 @@ stock bool:MPL_CheckDependencies()
         return MPD_CheckLive(0);
     #endif
 }
+#if MPL_CHUNK_STREAM
+new MPL_ChunkTimer, bool:MPL_ChunkOwned;
+new MPL_ChunkOriginalSize, MPL_ChunkOriginalEnabled;
+new MPL_ChunkAppliedSize;
+forward MPL_ChunkStart();
+public MPL_ChunkStart()
+{
+    MPL_ChunkTimer=0;
+    if (!MPL_Ready || MPL_ChunkOwned) return 1;
+    MPL_ChunkOriginalSize=Streamer_GetChunkSize(STREAMER_TYPE_OBJECT);
+    MPL_ChunkOriginalEnabled=Streamer_IsToggleChunkStream();
+    if (MPL_ChunkOriginalSize<=0)
+    {
+        print("[MapPulse][WARNING] Chunk size unavailable; no changes made.");
+        return 1;
+    }
+    MPL_ChunkAppliedSize=MPL_ChunkOriginalSize<MPL_CHUNK_SIZE?MPL_ChunkOriginalSize:MPL_CHUNK_SIZE;
+    if (!Streamer_SetChunkSize(STREAMER_TYPE_OBJECT,MPL_ChunkAppliedSize))
+    {
+        print("[MapPulse][WARNING] Chunk size update failed.");
+        return 1;
+    }
+    if (!MPL_ChunkOriginalEnabled && !Streamer_ToggleChunkStream(true))
+    {
+        if (!Streamer_SetChunkSize(STREAMER_TYPE_OBJECT,MPL_ChunkOriginalSize))
+            print("[MapPulse][WARNING] Failed to restore original chunk size.");
+        print("[MapPulse][WARNING] Chunk streaming toggle failed.");
+        return 1;
+    }
+    MPL_ChunkOwned=true;
+    printf("[MapPulse][OK] Chunk streaming: object size %d (previous %d), global toggle enabled.",MPL_ChunkAppliedSize,MPL_ChunkOriginalSize);
+    return 1;
+}
+
+stock MPL_ChunkRestore()
+{
+    if (MPL_ChunkTimer) { KillTimer(MPL_ChunkTimer); MPL_ChunkTimer=0; }
+    if (!MPL_ChunkOwned) return 1;
+    MPL_ChunkOwned=false;
+    if (!Streamer_IsToggleChunkStream() || Streamer_GetChunkSize(STREAMER_TYPE_OBJECT)!=MPL_ChunkAppliedSize)
+    {
+        print("[MapPulse][WARNING] Chunk settings changed externally; leaving them untouched.");
+        return 1;
+    }
+    if (!MPL_ChunkOriginalEnabled && !Streamer_ToggleChunkStream(false))
+        print("[MapPulse][WARNING] Could not restore original chunk toggle.");
+    if (!Streamer_SetChunkSize(STREAMER_TYPE_OBJECT,MPL_ChunkOriginalSize))
+        print("[MapPulse][WARNING] Could not restore original chunk size.");
+    return 1;
+}
+#endif
+
 stock MPL_Init()
 {
     if (MPL_Timer) return 0;
@@ -135,6 +187,9 @@ stock MPL_Init()
     MPL_Enabled=(MPL_START_ENABLED!=0);
     for (new p=0;p<MAX_PLAYERS;p++) if (IsPlayerConnected(p)) MPL_Join(p);
     MPL_Timer=SetTimer("MPL_Poll",MPL_TICK,true);
+    #if MPL_CHUNK_STREAM
+        MPL_ChunkTimer=SetTimer("MPL_ChunkStart",MPL_CHUNK_START_DELAY,false);
+    #endif
     printf("[MapPulse] Individual AUTO: %d | static map policy: optional",MPL_Enabled);
     print("----------------------------------------------------------");
     return 1;
@@ -144,6 +199,9 @@ stock MPL_Shutdown()
     if (MPL_Timer) KillTimer(MPL_Timer);
     MPL_Timer=0;
     MPV_Stop();
+    #if MPL_CHUNK_STREAM
+        MPL_ChunkRestore();
+    #endif
     MPL_Ready=false;
     for (new i=0;i<MPL_ActiveCount;i++) MPL_Restore(MPL_Active[i]);
     print("[MapPulse] Individual settings restored where owned; global map policy stays until maps are recreated/restart.");
@@ -410,6 +468,8 @@ stock MPL_Command_status(playerid)
     strcat(body,line,sizeof body);
     format(line,sizeof line,"{C0CCD9}Scheduler\tIgraci\t{FFFFFF}%d\n{C0CCD9}Scheduler\tObrade\t{FFFFFF}%d\n{C0CCD9}Scheduler\tProlazi\t{FFFFFF}%d\n{C0CCD9}Scheduler\tNajduzi prolaz\t{FFFFFF}%d ms\n{C0CCD9}Scheduler\tDostignut budzet\t{FFFFFF}%d\n",MPL_ActiveCount,MPL_SampleTotal,MPL_PollTotal,MPL_PollPeak,MPL_PollLimited);
     strcat(body,line,sizeof body);
+    format(line,sizeof line,"{C0CCD9}Chunk\tAktivno u Streameru\t{FFFFFF}%d\n{C0CCD9}Chunk\tVelicina objekata\t{FFFFFF}%d\n{C0CCD9}Chunk\tMapPulse kontrola\t{FFFFFF}%d\n",Streamer_IsToggleChunkStream(),Streamer_GetChunkSize(STREAMER_TYPE_OBJECT),MPL_CHUNK_STREAM);
+    strcat(body,line,sizeof body);
     return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Live Dashboard",body);
 }
 stock MPL_Command_cache(playerid)
@@ -429,10 +489,12 @@ stock MPL_Command_cache(playerid)
     new trimmed=CallRemoteFunction("MPM_CacheMetric","i",10);
     new slots=CallRemoteFunction("MPM_CacheMetric","i",11);
     new invalid=CallRemoteFunction("MPM_CacheMetric","i",12);
-    new Float:rate=0.0, body[1200], line[420];
+    new Float:rate=0.0, body[1800], line[420];
     if (hits>0 || misses>0) rate=100.0*float(hits)/(float(hits)+float(misses));
     format(body,sizeof body,"{73BFFF}Parametar\t{73BFFF}Vrednost\n{C0CCD9}Status\t%s\n{C0CCD9}Cache hits\t{FFFFFF}%d\n{C0CCD9}Cache misses\t{FFFFFF}%d\n{C0CCD9}Hit rate\t{FFFFFF}%.2f%%\n{C0CCD9}Popunjeni slotovi\t{FFFFFF}%d / %d\n{C0CCD9}Zamene slotova\t{FFFFFF}%d\n",enabled?"{75D69C}AKTIVAN":"{F6C85F}ISKLJUCEN",hits,misses,rate,occupied,slots,evictions);
     format(line,sizeof line,"{C0CCD9}Memorija niza\t{FFFFFF}%d B\n{C0CCD9}Geometrijski proracuni\t{FFFFFF}%d\n{C0CCD9}Nepoznata geometrija\t{FFFFFF}%d\n{C0CCD9}Neispravan prag\t{FFFFFF}%d\n{C0CCD9}Kreirani objekti\t{FFFFFF}%d\n{C0CCD9}Prioriteti\t{FFFFFF}%d\n{C0CCD9}Skracena udaljenost\t{FFFFFF}%d\n",slots*8,geometry,unknown,invalid,created,prioritized,trimmed);
+    strcat(body,line,sizeof body);
+    format(line,sizeof line,"{C0CCD9}Zastita materijala\t{FFFFFF}%d\n{C0CCD9}Vraceni objekti\t{FFFFFF}%d\n{C0CCD9}Konflikti\t{FFFFFF}%d\n{C0CCD9}Greske upisa/citanja\t{FFFFFF}%d\n{C0CCD9}Preskoceni ID-jevi\t{FFFFFF}%d\n{C0CCD9}Zastitni nizovi\t{FFFFFF}%d B\n",CallRemoteFunction("MPM_CacheMetric","i",17),CallRemoteFunction("MPM_CacheMetric","i",13),CallRemoteFunction("MPM_CacheMetric","i",14),CallRemoteFunction("MPM_CacheMetric","i",15),CallRemoteFunction("MPM_CacheMetric","i",16),CallRemoteFunction("MPM_CacheMetric","i",18));
     strcat(body,line,sizeof body);
     strcat(body,"{B6C2D0}Izvor\tMap include / AMX\n{B6C2D0}Autor\t0xOgysha",sizeof body);
     return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Model Cache",body);

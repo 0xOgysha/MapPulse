@@ -6,7 +6,7 @@
 
 **Adaptivno učitavanje mapa i inteligentna prioritizacija objekata za SA-MP i open.mp.**
 
-![Verzija](https://img.shields.io/badge/version-0.9.0-blue)
+![Verzija](https://img.shields.io/badge/version-1.0.0-blue)
 ![Jezik](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Platforme](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse je lagana Pawn ekstenzija izgrađena na postojećem Incognito Streamer 
 
 Projekat je zasnovan na jednostavnom principu: **automatska optimizacija, bez potrebe da igrači ručno učitavaju mape.** MapPulse ne zamenjuje Streamer, već predstavlja dodatni sloj za upravljanje njegovim ponašanjem u postojećim gamemode skriptama.
 
-> **Status razvoja:** v0.9.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Pre produkcijske primene testirajte sistem na probnom serveru.
+> **Status razvoja:** v1.0.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Ovo je testna verzija 1.0.0, ne potvrđeno stabilno izdanje. Pre produkcijske primene testirajte sistem na probnom serveru.
 
 ## Sadržaj
 
@@ -138,7 +138,7 @@ MapPulse podešavanja se kompajliraju u skripte; navedena serverska konfiguracij
 | `filterscripts/mappulse.pwn` | Ulazna tačka filterscripta, callbackovi životnog ciklusa, opcione nativne komande i odgovori na dialog |
 | `filterscripts/mappulse_live.inc` | Raspoređivanje igrača, procena kretanja, politika radijusa, dijagnostika, A/B testovi i komande |
 | `include/mappulse_maps.inc` | Funkcije za preusmeravanje kreiranja dinamičkih objekata, klasifikacija modela, politika kreiranja i brojači |
-| `include/mappulse_settings.inc` | Svih 65 korisničkih DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
+| `include/mappulse_settings.inc` | Svih 70 korisničkih DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
 
 ```mermaid
 flowchart TD
@@ -156,7 +156,7 @@ Dva modula se dopunjuju. Include upravlja parametrima odgovarajućih objekata pr
 
 ## Matematički pristup
 
-Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v0.9.0, a ne izmerene rezultate performansi.
+Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v1.0.0, a ne izmerene rezultate performansi.
 
 ### 1. Kvadrat euklidske udaljenosti i brzine
 
@@ -211,7 +211,7 @@ Podrazumevana politika menja samo pozive sa prioritetom `0`, pozitivnom udaljeno
 | Lista modela visokog prioriteta | `3` |
 | Lista modela srednjeg prioriteta | `2` |
 | Odabrani dekorativni model (`14400`) | Udaljenost streaminga × `0.85`, uz ograničenja |
-| Poznati strukturni modeli bez pravila | Geometrijski prioritet prema skoru |
+| Poznati strukturni modeli bez pravila | Geometrijski prioritet ako je uključen (podrazumevano isključen) |
 | Nepoznati modeli ili eksplicitan prioritet različit od nule | Originalni parametri |
 
 Liste modela su podesive i treba ih proveriti za mape svakog servera. ID modela nije dokaz da objekat u konkretnoj sceni predstavlja pod, zid ili isključivo dekoraciju. Podrazumevane liste obuhvataju odabrane građevinske modele, ne sve moguće konstrukcije.
@@ -220,9 +220,9 @@ Za pravilo dekoracija originalna udaljenost streaminga mora biti između 120 i 5
 
 Funkcije čuvaju pozicije, rotacije, ograničenja sveta/enterijera/igrača/oblasti i eksplicitne nenulte prioritete. Ne prepoznaju automatski kapije koje će se kasnije pomerati niti zakačene objekte; proverite te modele ako ih gamemode koristi. Objekti kreirani običnim `CreateObject` nisu obuhvaćeni politikom.
 
-### Model Cache i geometrijska klasifikacija (v0.9.0)
+### Model Cache i geometrijska klasifikacija (v1.0.0)
 
-Bez dodatnih zavisnosti. MapPulse ima sopstvenu malu početnu tabelu od osam proverenih strukturnih modela; **nije kompletna baza svih GTA:SA modela**. Čuvaju se samo preporuke prioriteta po modelu, ne pozicije, rotacije, niti objekti. Postojeći ručno dodeljeni prioritet i liste modela imaju prednost. Nepoznati modeli bez postojećeg pravila ostaju nepromenjeni. Geometrija ne menja stream/draw distance; ranije selektivno pravilo dekoracije ostaje nezavisno.
+Bez dodatnih zavisnosti. MapPulse ima sopstvenu malu početnu tabelu od osam preliminarnih strukturnih modela; **nije kompletna baza svih GTA:SA modela**. Čuvaju se samo preporuke prioriteta po modelu, ne pozicije, rotacije, niti objekti. Postojeći ručno dodeljeni prioritet i liste modela imaju prednost. Nepoznati modeli bez postojećeg pravila ostaju nepromenjeni. Geometrija ne menja stream/draw distance; ranije selektivno pravilo dekoracije ostaje nezavisno.
 
 Za dimenzije x, y, z u metrima, skor je $S=xy+yz+zx$. S >= 70 daje visoki prioritet, S >= 10 srednji; ispod praga nema promene. Skor je heuristika, ne dokaz kolizione važnosti.
 
@@ -232,11 +232,37 @@ Cache koristi direktno mapiranje model ID modulo broj slotova, sa proverom kompl
 |---|---|---|
 | MPM_MODEL_CACHE | 1 | Uključuje keširanje |
 | MPM_CACHE_MAX_MODELS | 4096 | Broj slotova (64–32768) |
-| MPM_AUTO_CLASSIFY | 1 | Uključuje geometrijsku klasifikaciju poznatih modela |
+| MPM_AUTO_CLASSIFY | 0 | Uključuje geometrijsku klasifikaciju poznatih modela |
 | MPM_GEOMETRY_HIGH | 70.0 | Visoki prag skora |
 | MPM_GEOMETRY_MEDIUM | 10.0 | Srednji prag skora |
 
-Izvori pojedinačnih dimenzija: Prineside DevTools – [19353](https://dev.prineside.com/en/gtasa_samp_model_id/model/19353-wall001/), [19377](https://dev.prineside.com/en/gtasa_samp_model_id/model/19377-wall025/), [19378](https://dev.prineside.com/en/gtasa_samp_model_id/model/19378-wall026/), [19379](https://dev.prineside.com/en/gtasa_samp_model_id/model/19379), [19454](https://dev.prineside.com/en/gtasa_samp_model_id/model/19454), [19455](https://dev.prineside.com/gtasa_samp_model_id/model/19455-wall095/), [19456](https://dev.prineside.com/gtasa_samp_model_id/model/19456-wall096/), [18762](https://dev.prineside.com/en/gtasa_samp_model_id/model/18762-Concrete1mx1mx5m/). Idejna inspiracija: [OptiDraw](https://github.com/algorhitmically/optidraw); implementacija je samostalna, bez ModelSizes/YSI i bez preuzimanja njihove baze. Za širenje baze potrebno je proveriti dimenzije i prava redistribucije.
+Preliminarni izvori pojedinačnih dimenzija (potrebna dodatna provera): Prineside DevTools – [19353](https://dev.prineside.com/en/gtasa_samp_model_id/model/19353-wall001/), [19377](https://dev.prineside.com/en/gtasa_samp_model_id/model/19377-wall025/), [19378](https://dev.prineside.com/en/gtasa_samp_model_id/model/19378-wall026/), [19379](https://dev.prineside.com/en/gtasa_samp_model_id/model/19379), [19454](https://dev.prineside.com/en/gtasa_samp_model_id/model/19454), [19455](https://dev.prineside.com/gtasa_samp_model_id/model/19455-wall095/), [19456](https://dev.prineside.com/gtasa_samp_model_id/model/19456-wall096/), [18762](https://dev.prineside.com/en/gtasa_samp_model_id/model/18762-Concrete1mx1mx5m/). Idejna inspiracija: [OptiDraw](https://github.com/algorhitmically/optidraw); implementacija je samostalna, bez ModelSizes/YSI i bez preuzimanja njihove baze. Za širenje baze potrebno je proveriti dimenzije i prava redistribucije.
+
+### Zaštita materijala i chunk streaming
+
+Podrazumevano je geometrijska klasifikacija isključena (MPM_AUTO_CLASSIFY=0) dok ne budu potvrđene sve dimenzije i stabilnost. Postojeće liste prioriteta i cache ostaju aktivni. ModelSizes i YSI nisu potrebni.
+
+Sa MPM_PROTECT_MATERIALS=1, objekat se prvo kreira originalnim parametrima. MapPulse zatim primenjuje samo podržanu promenu prioriteta ili stream distance-a i pamti originalnu i primenjenu vrednost. Pre poziva SetDynamicObjectMaterial ili SetDynamicObjectMaterialText kroz ovaj include, vraća samo svoju izmenu ako se vrednost nije promenila spolja. Materijal se prosleđuje originalnoj funkciji nepromenjen, čak i ako zaštita ne uspe. DestroyDynamicObject briše evidenciju pri uspešnom brisanju. Ovo nije garancija protiv crasha. Pozivi iz druge AMX skripte, pre include-a ili kroz druge native/makroe, masovno brisanje i ponovno korišćenje ID-ja van ovih wrappera nisu pokriveni. Za sneg i posebne mape preporučuje se eksplicitni bypass.
+
+```pawn
+new bool:previous = MPM_SetPolicyPaused(true);
+// Ovde sinhrono kreiraj objekte snega, sa originalnim parametrima.
+MPM_SetPolicyPaused(previous);
+```
+
+Zaštita koristi četiri niza od po MPM_PROTECTION_LIMIT ćelija: 512 KiB pri 32768 slotova na 32-bitnom Pawn-u. ID izvan opsega preskače optimizaciju umesto da ostane bez evidencije. /mpcache prikazuje uspešna vraćanja, konflikte, greške i preskočene ID-jeve. Statistika prioriteta i udaljenosti broji uspešne primene pri kreiranju, ne trenutno aktivne promene.
+
+Chunk streaming je opcion (MPL_CHUNK_STREAM=0). Kada je uključen, FS nakon jednog odloženog poziva uključuje globalni Streamer chunk toggle i podešava veličinu grupe objekata na manju od postojeće vrednosti i MPL_CHUNK_SIZE. Ne menja globalni limit vidljivih objekata, draw distance, tick rate ili chunk tick rate. Globalni toggle može uticati i na druge tipove stavki. Pri gašenju FS pokušava da vrati prethodno stanje samo ako podešavanja i dalje odgovaraju njegovim upisima. /mpstatus prikazuje stvarni toggle i veličinu grupe; ne radi se automatsko ponovno nametanje podešavanja. Chunk streaming ne ograničava sve naknadne pakete materijala i ne garantuje sprečavanje crasha.
+
+| Define | Podrazumevano | Namena |
+|---|---|---|
+| MPM_PROTECT_MATERIALS | 1 | Evidencija i vraćanje MapPulse izmena za materijale |
+| MPM_PROTECTION_LIMIT | 32768 | Opseg ID-jeva za evidenciju |
+| MPL_CHUNK_STREAM | 0 | Opcioni globalni chunk režim |
+| MPL_CHUNK_SIZE | 50 | Gornja granica veličine grupe objekata |
+| MPL_CHUNK_START_DELAY | 3000 | Odlaganje prvog podešavanja u ms |
+
+**Testiranje snega:** Sačuvajte stari AMX i podešavanja. Testirajte prvo bez MapPulse-a, zatim samo map include, zatim FS uz isključen chunk, pa chunk veličine 50 i 25. U svakoj varijanti ponovite uključivanje/isključivanje snega, vožnju istom rutom, teleport i reconnect. Beležite stvarni chunk size, vidljive objekte, /mpcache, /mpstatus, vreme pojavljivanja mape i klijentski crash log. Ne menjajte više parametara odjednom; ModelSizes nije potreban. Ako koristite centralizovane dialoge, zadržite autorizovani dialog bridge.
 
 ## Podešavanja
 
@@ -374,7 +400,7 @@ Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarn
 
 ### Automatska provera verzije MapPulse-a
 
-MapPulse v0.9.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
+MapPulse v1.0.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
 
 | Define | Vrednost | Namena |
 |---|---|---|
@@ -400,7 +426,7 @@ Izveštaj obuhvata broj uzoraka, prosečan/maksimalan broj vidljivih objekata, p
 
 Ugrađeno A/B poređenje izoluje individualnu politiku radijusa **uz istu politiku kreiranja mapa u oba testa**. Za procenu prioriteta i skraćivanja udaljenosti pri kreiranju, izvršite testove na odvojeno kompajliranim verzijama sa isključenim i uključenim `MPM_ENABLE`, uz ponovno kreiranje istih mapa između testova.
 
-Za v0.9.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
+Za v1.0.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
 
 ## Ograničenja i rešavanje problema
 

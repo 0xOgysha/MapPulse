@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_settings.inc | MapPulse v0.9.0
+ * mappulse_settings.inc | MapPulse v1.0.0
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -44,8 +44,8 @@
 
 // PROVERA VERZIJE MAPPULSE-A
 
-#define MPV_VERSION "0.9.0" // Verzija paketa; ne menjati rucno.
-#define MPV_VERSION_CODE (9000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_VERSION "1.0.0" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (1000000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
 #define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
 
 #if !defined MPL_UPDATE_CHECK
@@ -215,7 +215,7 @@
     #define MPM_CACHE_MAX_MODELS (4096) // Broj slotova kes memorije; 8 bajtova po slotu.
 #endif
 #if !defined MPM_AUTO_CLASSIFY
-    #define MPM_AUTO_CLASSIFY (1) // 1 = procenjuje prioritet poznatih strukturnih modela prema ugradjenim dimenzijama.
+    #define MPM_AUTO_CLASSIFY (0) // 1 = procenjuje prioritet poznatih strukturnih modela prema ugradjenim dimenzijama.
 #endif
 #if !defined MPM_GEOMETRY_HIGH
     #define MPM_GEOMETRY_HIGH (70.0) // Donji prag geometrijskog skora za visok prioritet (m^2).
@@ -225,6 +225,33 @@
 #endif
 #if MPM_MODEL_CACHE && (MPM_CACHE_MAX_MODELS < 64 || MPM_CACHE_MAX_MODELS > 32768)
     #error MapPulse: cache size must be between 64 and 32768
+#endif
+
+// ZASTITA MATERIJALA I OBJEKATA
+
+#if !defined MPM_PROTECT_MATERIALS
+    #define MPM_PROTECT_MATERIALS (1) // 1 = vraca samo MapPulse izmene pre postavljanja materijala ili teksta.
+#endif
+#if !defined MPM_PROTECTION_LIMIT
+    #define MPM_PROTECTION_LIMIT (32768) // ID-jevi od 1 do limit-1; 16 bajtova po slotu; veci ID-jevi se ne optimizuju uz zastitu.
+#endif
+#if MPM_PROTECT_MATERIALS && (MPM_PROTECTION_LIMIT < 1024 || MPM_PROTECTION_LIMIT > 262144)
+    #error MapPulse: invalid protection limit
+#endif
+
+// KONTROLISANI CHUNK STREAMING
+
+#if !defined MPL_CHUNK_STREAM
+    #define MPL_CHUNK_STREAM (0) // 1 = FS opciono ukljucuje globalni chunk streaming; 0 = ne menja podesavanja Streamera.
+#endif
+#if !defined MPL_CHUNK_SIZE
+    #define MPL_CHUNK_SIZE (50) // Maksimalna velicina grupe objekata koju podesavamo u Streameru.
+#endif
+#if !defined MPL_CHUNK_START_DELAY
+    #define MPL_CHUNK_START_DELAY (3000) // Jednokratno odlaganje nakon FS init da gamemode zavrsi pocetna podesavanja (ms).
+#endif
+#if MPL_CHUNK_STREAM && (MPL_CHUNK_SIZE < 1 || MPL_CHUNK_SIZE > 250 || MPL_CHUNK_START_DELAY < 1)
+    #error MapPulse: invalid chunk settings
 #endif
 
 // ADMINISTRATORSKI A/B TESTOVI
