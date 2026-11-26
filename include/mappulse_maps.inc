@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_maps.inc | MapPulse v1.0.1
+ * mappulse_maps.inc | MapPulse v1.0.2
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
     #define STREAMER_TAG_AREA _
 #endif
 #include <mappulse_settings>
-#define MPM_BUILD_CODE (1000001)
+#define MPM_BUILD_CODE (1000002)
 new MPM_Created, MPM_Prioritized, MPM_Trimmed;
 new bool:MPM_Started, bool:MPM_PolicyPaused;
 new MPM_MaterialRestored, MPM_MaterialConflicts, MPM_MaterialFailures, MPM_ProtectionSkipped;

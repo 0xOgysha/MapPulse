@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_settings.inc | MapPulse v1.0.1
+ * mappulse_settings.inc | MapPulse v1.0.2
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -44,8 +44,8 @@
 
 // PROVERA VERZIJE MAPPULSE-A
 
-#define MPV_VERSION "1.0.1" // Verzija paketa; ne menjati rucno.
-#define MPV_VERSION_CODE (1000001) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_VERSION "1.0.2" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (1000002) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
 #define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
 
 #if !defined MPL_UPDATE_CHECK
@@ -227,7 +227,7 @@
     #error MapPulse: cache size must be between 64 and 32768
 #endif
 
-// ADAPTIVNO SMANJIVANJE RADIJUSA (v1.0.1)
+// ADAPTIVNO SMANJIVANJE RADIJUSA (v1.0.2)
 
 #if !defined MPL_ADAPTIVE_REDUCTION
     #define MPL_ADAPTIVE_REDUCTION (1) // 1 = dozvoljava postepeno smanjenje samo u vozilu, u spoljasnjem svetu 0.
@@ -450,7 +450,11 @@ stock MPV_Start(const module[],compiledVersion)
             new RequestsClient:client=RequestsClient(MPL_UPDATE_HOST);
             Request(client,MPL_UPDATE_PATH,HTTP_METHOD_GET,"MPV_RequestResponse");
         #else
-            if (!HTTP(8700,HTTP_GET,MPL_UPDATE_URL,"","MPV_HttpResponse"))
+            // Legacy a_http declares all three string parameters as mutable arrays.
+            new httpUrl[]=MPL_UPDATE_URL;
+            new httpData[1]={0};
+            new httpCallback[]="MPV_HttpResponse";
+            if (!HTTP(8700,HTTP_GET,httpUrl,httpData,httpCallback))
                 MPV_HandleVersion(0,"");
         #endif
     #else

@@ -6,7 +6,7 @@
 
 **Adaptive map streaming and intelligent object prioritization for SA-MP and open.mp.**
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Language](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Targets](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse is a lightweight Pawn extension built on top of the Incognito Streamer 
 
 The project was designed around a simple principle: **optimize automatically, without requiring players to reload maps manually.** MapPulse is not a replacement for Streamer; it provides an additional policy layer for existing gamemodes.
 
-> **Development status:** v1.0.1 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. This is a 1.0.1 test candidate, not a verified stable release. Test on a staging server before production deployment.
+> **Development status:** v1.0.2 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. This is a 1.0.2 test candidate, not a verified stable release. Test on a staging server before production deployment.
 
 ## Contents
 
@@ -156,7 +156,7 @@ The two modules complement each other. The include controls eligible object para
 
 ## Mathematical approach
 
-MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v1.0.1 policy, not measured performance results.
+MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v1.0.2 policy, not measured performance results.
 
 ### 1. Squared Euclidean distance and speed
 
@@ -198,7 +198,7 @@ This area-based approximation is a heuristic. Dense clusters, multilevel interio
 
 ### 4. Hysteresis and scheduling
 
-**Adaptive Streaming v2 (1.0.1).** With occupancy at or above 85%, three consecutive high samples and a six-second cooldown, the radius decreases by up to 5% of the baseline per step (if above baseline, return to baseline first), down to 85% of baseline. Reduction is limited to vehicle drivers/passengers at or above MPL_DRIVE_SPEED in world 0, interior 0. Counts at the visible limit are censored, so they are not treated as exact density. Hold between thresholds; after three low samples (<=60%) and cooldown, recover toward baseline one step at a time if the area estimate stays within the 75% target. Outside reduction conditions (stopping, leaving a vehicle, world/interior changes or jumps), restore the baseline while MapPulse owns the setting. Visibility and collision can be affected: test carefully. At the floor, continued saturation does not cause further reduction. /mpstatus reports current occupancy, floor, counters and last state; A/B records the minimum sampled radius. Test A remains unadapted. Disable MPL_ADAPTIVE_REDUCTION to restore the previous policy.
+**Adaptive Streaming v2 (1.0.2).** With occupancy at or above 85%, three consecutive high samples and a six-second cooldown, the radius decreases by up to 5% of the baseline per step (if above baseline, return to baseline first), down to 85% of baseline. Reduction is limited to vehicle drivers/passengers at or above MPL_DRIVE_SPEED in world 0, interior 0. Counts at the visible limit are censored, so they are not treated as exact density. Hold between thresholds; after three low samples (<=60%) and cooldown, recover toward baseline one step at a time if the area estimate stays within the 75% target. Outside reduction conditions (stopping, leaving a vehicle, world/interior changes or jumps), restore the baseline while MapPulse owns the setting. Visibility and collision can be affected: test carefully. At the floor, continued saturation does not cause further reduction. /mpstatus reports current occupancy, floor, counters and last state; A/B records the minimum sampled radius. Test A remains unadapted. Disable MPL_ADAPTIVE_REDUCTION to restore the previous policy.
 
 A shared 100 ms timer visits at most 16 active slots per pass, with a soft 2 ms work budget. Normal samples are spaced at least 1.5 seconds apart; eligible idle players without an active radius modification use 2.5 seconds. The active-player list uses swap removal rather than scanning all possible player slots every tick. Actual intervals can be longer under load. The time budget is checked after individual operations and is not a hard real-time guarantee.
 
@@ -220,7 +220,7 @@ For the decorative rule, the original stream distance must be between 120 and 50
 
 The wrappers preserve positions, rotations, world/interior/player/area restrictions and explicit nonzero priorities. With material protection enabled, native creation uses the original parameters and tracked modifications follow creation. They do not automatically identify future moving gates or attached objects; review those models if your gamemode uses them. Objects created with ordinary `CreateObject` are outside this policy.
 
-### Model Cache and geometry classification (v1.0.1)
+### Model Cache and geometry classification (v1.0.2)
 
 No new dependencies. MapPulse contains a small starter table of eight provisional structural model entries, **not a complete GTA:SA model database**. It caches only model-level priority recommendations, not positions, rotations or object instances. Explicit priorities and existing configured model lists take precedence. Unknown models without existing rules remain unchanged. Geometry does not alter streaming or draw distances; the existing selective decoration rule remains independent.
 
@@ -269,6 +269,8 @@ Chunk streaming is opt-in (MPL_CHUNK_STREAM=0). When enabled, after a single del
 | MPL_ADAPTIVE_REDUCTION | 1 | Enable bounded radius reduction |
 | MPL_REDUCTION_FLOOR | 85 | Lower bound (% of baseline; 80–99) |
 | MPL_REDUCTION_STEP | 5 | Step (% of baseline; 1–10, no greater than distance to floor) |
+
+**v1.0.2 fix:** the native HTTP call uses three mutable string arrays for compatibility with the legacy `a_http.inc` signature. Warning 239 is addressed in code, without disabling warnings. The algorithm and dialog system are unchanged from v1.0.1.
 
 ## Configuration
 
@@ -405,7 +407,7 @@ Pawn does not expose a dependable binary-version getter through these dependenci
 
 ### Automatic MapPulse version check
 
-MapPulse v1.0.1 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
+MapPulse v1.0.2 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
 
 | Define | Default | Purpose |
 |---|---|---|
@@ -431,7 +433,7 @@ The report includes sample count, mean/peak visible objects, configured limit, o
 
 The built-in A/B comparison isolates the individual radius policy **with the same creation-time map policy in both runs**. To evaluate creation-time priorities and distance trimming, run separate server builds with `MPM_ENABLE` disabled and enabled, recreating the same maps between tests.
 
-No verified FPS or CPU improvement percentage is published for v1.0.1. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
+No verified FPS or CPU improvement percentage is published for v1.0.2. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
 
 ## Limitations and troubleshooting
 
