@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_maps.inc | MapPulse v0.8.0
+ * mappulse_maps.inc | MapPulse v0.9.0
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
     #define STREAMER_TAG_AREA _
 #endif
 #include <mappulse_settings>
-#define MPM_BUILD_CODE (8000)
+#define MPM_BUILD_CODE (9000)
 new MPM_Created, MPM_Prioritized, MPM_Trimmed;
 new bool:MPM_Started;
 stock MPM_Init()
@@ -33,15 +33,107 @@ stock MPM_Init()
     }
     return 1;
 }
+new MPM_CacheHits, MPM_CacheMisses, MPM_CacheUsed, MPM_CacheEvictions;
+new MPM_GeometryEvaluations, MPM_GeometryUnknown, MPM_GeometryInvalid;
+#if MPM_MODEL_CACHE
+new MPM_CacheKeys[MPM_CACHE_MAX_MODELS], MPM_CachePriorities[MPM_CACHE_MAX_MODELS];
+#endif
+
+stock bool:MPM_GetModelGeometry(modelid, &Float:x, &Float:y, &Float:z)
+{
+    switch (modelid)
+    {
+        case 18762: { x=1.0; y=1.0; z=5.0; }
+        case 19353: { x=0.1787764; y=3.21515; z=3.50048; }
+        case 19377,19378,19379: { x=0.1787764; y=9.63762; z=10.50146; }
+        case 19454,19455,19456: { x=0.1787764; y=9.63762; z=3.50048; }
+        default: return false;
+    }
+    return true;
+}
+
+stock MPM_ClassifyModel(modelid)
+{
+    #if MPM_ENABLE_PRIORITY
+        switch (modelid)
+        {
+            case MPM_HIGH_MODELS: return MPM_PRIORITY_HIGH;
+            case MPM_MEDIUM_MODELS: return MPM_PRIORITY_MEDIUM;
+        }
+        #if MPM_AUTO_CLASSIFY
+            if (MPM_GEOMETRY_MEDIUM <= 0.0 || MPM_GEOMETRY_HIGH < MPM_GEOMETRY_MEDIUM)
+            {
+                MPM_GeometryInvalid++;
+                return 0;
+            }
+            new Float:x, Float:y, Float:z;
+            if (!MPM_GetModelGeometry(modelid,x,y,z))
+            {
+                MPM_GeometryUnknown++;
+                return 0;
+            }
+            MPM_GeometryEvaluations++;
+            new Float:score=x*y+y*z+z*x;
+            if (score >= MPM_GEOMETRY_HIGH) return MPM_PRIORITY_HIGH;
+            if (score >= MPM_GEOMETRY_MEDIUM) return MPM_PRIORITY_MEDIUM;
+        #endif
+    #else
+        #pragma unused modelid
+    #endif
+    return 0;
+}
+
+stock MPM_GetModelPriority(modelid)
+{
+    #if MPM_MODEL_CACHE
+        if (modelid >= 0 && modelid < 2147483647)
+        {
+            new key=modelid+1, slot=modelid%MPM_CACHE_MAX_MODELS;
+            if (MPM_CacheKeys[slot]==key)
+            {
+                MPM_CacheHits++;
+                return MPM_CachePriorities[slot];
+            }
+            MPM_CacheMisses++;
+            if (MPM_CacheKeys[slot]) MPM_CacheEvictions++;
+            else MPM_CacheUsed++;
+            new priority=MPM_ClassifyModel(modelid);
+            MPM_CacheKeys[slot]=key;
+            MPM_CachePriorities[slot]=priority;
+            return priority;
+        }
+    #endif
+    MPM_CacheMisses++;
+    return MPM_ClassifyModel(modelid);
+}
+
+forward MPM_CacheMetric(metric);
+public MPM_CacheMetric(metric)
+{
+    switch (metric)
+    {
+        case 0: return MPM_BUILD_CODE;
+        case 1: return MPM_MODEL_CACHE;
+        case 2: return MPM_CacheHits;
+        case 3: return MPM_CacheMisses;
+        case 4: return MPM_CacheUsed;
+        case 5: return MPM_CacheEvictions;
+        case 6: return MPM_GeometryEvaluations;
+        case 7: return MPM_GeometryUnknown;
+        case 8: return MPM_Created;
+        case 9: return MPM_Prioritized;
+        case 10: return MPM_Trimmed;
+        case 11: return MPM_MODEL_CACHE ? MPM_CACHE_MAX_MODELS : 0;
+        case 12: return MPM_GeometryInvalid;
+    }
+    return 0;
+}
+
 stock MPM_Apply(modelid, &priority, &Float:sd, Float:dd)
 {
     if (!MPM_ENABLE || priority != 0 || sd <= 0.0) return 0;
     #if MPM_ENABLE_PRIORITY
-    switch (modelid)
-    {
-        case MPM_HIGH_MODELS: priority=MPM_PRIORITY_HIGH;
-        case MPM_MEDIUM_MODELS: priority=MPM_PRIORITY_MEDIUM;
-    }
+    priority=MPM_GetModelPriority(modelid);
     #endif
     if (priority) return 1;
     #if MPM_TRIM_DECOR
@@ -95,6 +187,7 @@ stock MPM_PrintStats()
 {
     MPM_Init();
     printf("[MapPulse | Map include] Author: %s | Created=%d priority=%d decor=%d",MPV_AUTHOR,MPM_Created,MPM_Prioritized,MPM_Trimmed);
+    printf("[MapPulse | Cache] Hits=%d misses=%d occupied=%d evictions=%d geometry=%d unknown=%d",MPM_CacheHits,MPM_CacheMisses,MPM_CacheUsed,MPM_CacheEvictions,MPM_GeometryEvaluations,MPM_GeometryUnknown);
     return 1;
 }
 

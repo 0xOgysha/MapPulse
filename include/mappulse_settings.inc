@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_settings.inc | MapPulse v0.8.0
+ * mappulse_settings.inc | MapPulse v0.9.0
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -44,8 +44,8 @@
 
 // PROVERA VERZIJE MAPPULSE-A
 
-#define MPV_VERSION "0.8.0" // Verzija paketa; ne menjati rucno.
-#define MPV_VERSION_CODE (8000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_VERSION "0.9.0" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (9000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
 #define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
 
 #if !defined MPL_UPDATE_CHECK
@@ -204,6 +204,27 @@
 #endif
 #if !defined MPM_DECOR_MIN_CHANGE
     #define MPM_DECOR_MIN_CHANGE          (5.0)                  // Minimalno potrebno skracenje streaming udaljenosti (metri).
+#endif
+
+// MODEL CACHE I GEOMETRIJSKA KLASIFIKACIJA
+
+#if !defined MPM_MODEL_CACHE
+    #define MPM_MODEL_CACHE (1) // 1 = cuva preporuceni prioritet po ID-ju modela u RAM memoriji.
+#endif
+#if !defined MPM_CACHE_MAX_MODELS
+    #define MPM_CACHE_MAX_MODELS (4096) // Broj slotova kes memorije; 8 bajtova po slotu.
+#endif
+#if !defined MPM_AUTO_CLASSIFY
+    #define MPM_AUTO_CLASSIFY (1) // 1 = procenjuje prioritet poznatih strukturnih modela prema ugradjenim dimenzijama.
+#endif
+#if !defined MPM_GEOMETRY_HIGH
+    #define MPM_GEOMETRY_HIGH (70.0) // Donji prag geometrijskog skora za visok prioritet (m^2).
+#endif
+#if !defined MPM_GEOMETRY_MEDIUM
+    #define MPM_GEOMETRY_MEDIUM (10.0) // Donji prag geometrijskog skora za srednji prioritet (m^2).
+#endif
+#if MPM_MODEL_CACHE && (MPM_CACHE_MAX_MODELS < 64 || MPM_CACHE_MAX_MODELS > 32768)
+    #error MapPulse: cache size must be between 64 and 32768
 #endif
 
 // ADMINISTRATORSKI A/B TESTOVI

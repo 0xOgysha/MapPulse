@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_live.inc | MapPulse v0.8.0
+ * mappulse_live.inc | MapPulse v0.9.0
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
 #if MPL_USE_PAWNCMD
     #include <Pawn.CMD>
 #endif
-#define MPL_BUILD_CODE (8000)
+#define MPL_BUILD_CODE (9000)
 new bool:MPL_Ready;
 new MPL_Active[MAX_PLAYERS], MPL_ActiveIndex[MAX_PLAYERS], MPL_ActiveCount;
 new MPL_SampleTotal, MPL_PollTotal, MPL_PollPeak, MPL_PollLimited;
@@ -412,6 +412,31 @@ stock MPL_Command_status(playerid)
     strcat(body,line,sizeof body);
     return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Live Dashboard",body);
 }
+stock MPL_Command_cache(playerid)
+{
+    if (!MPL_Admin(playerid)) return 1;
+    if (CallRemoteFunction("MPM_CacheMetric","i",0)!=MPL_BUILD_CODE)
+        return SendClientMessage(playerid,MPL_COLOR,"[MP] Map include nije dostupan ili nije iste verzije. Proveri gamemode.");
+    new enabled=CallRemoteFunction("MPM_CacheMetric","i",1);
+    new hits=CallRemoteFunction("MPM_CacheMetric","i",2);
+    new misses=CallRemoteFunction("MPM_CacheMetric","i",3);
+    new occupied=CallRemoteFunction("MPM_CacheMetric","i",4);
+    new evictions=CallRemoteFunction("MPM_CacheMetric","i",5);
+    new geometry=CallRemoteFunction("MPM_CacheMetric","i",6);
+    new unknown=CallRemoteFunction("MPM_CacheMetric","i",7);
+    new created=CallRemoteFunction("MPM_CacheMetric","i",8);
+    new prioritized=CallRemoteFunction("MPM_CacheMetric","i",9);
+    new trimmed=CallRemoteFunction("MPM_CacheMetric","i",10);
+    new slots=CallRemoteFunction("MPM_CacheMetric","i",11);
+    new invalid=CallRemoteFunction("MPM_CacheMetric","i",12);
+    new Float:rate=0.0, body[1200], line[420];
+    if (hits>0 || misses>0) rate=100.0*float(hits)/(float(hits)+float(misses));
+    format(body,sizeof body,"{73BFFF}Parametar\t{73BFFF}Vrednost\n{C0CCD9}Status\t%s\n{C0CCD9}Cache hits\t{FFFFFF}%d\n{C0CCD9}Cache misses\t{FFFFFF}%d\n{C0CCD9}Hit rate\t{FFFFFF}%.2f%%\n{C0CCD9}Popunjeni slotovi\t{FFFFFF}%d / %d\n{C0CCD9}Zamene slotova\t{FFFFFF}%d\n",enabled?"{75D69C}AKTIVAN":"{F6C85F}ISKLJUCEN",hits,misses,rate,occupied,slots,evictions);
+    format(line,sizeof line,"{C0CCD9}Memorija niza\t{FFFFFF}%d B\n{C0CCD9}Geometrijski proracuni\t{FFFFFF}%d\n{C0CCD9}Nepoznata geometrija\t{FFFFFF}%d\n{C0CCD9}Neispravan prag\t{FFFFFF}%d\n{C0CCD9}Kreirani objekti\t{FFFFFF}%d\n{C0CCD9}Prioriteti\t{FFFFFF}%d\n{C0CCD9}Skracena udaljenost\t{FFFFFF}%d\n",slots*8,geometry,unknown,invalid,created,prioritized,trimmed);
+    strcat(body,line,sizeof body);
+    strcat(body,"{B6C2D0}Izvor\tMap include / AMX\n{B6C2D0}Autor\t0xOgysha",sizeof body);
+    return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Model Cache",body);
+}
 stock MPL_Command_liveoff(playerid)
 {
     if (!MPL_Admin(playerid)) return 1;
@@ -452,6 +477,11 @@ CMD:mpstatus(playerid,params[])
     #pragma unused params
     return MPL_Command_status(playerid);
 }
+CMD:mpcache(playerid,params[])
+{
+    #pragma unused params
+    return MPL_Command_cache(playerid);
+}
 CMD:mpliveoff(playerid,params[])
 {
     #pragma unused params
@@ -471,6 +501,7 @@ stock MPL_HandleCommand(playerid,const cmdtext[])
     if (!strcmp(cmdtext,"/mpoff",true)) return MPL_Command_off(playerid);
     if (!strcmp(cmdtext,"/mpcompare",true)) return MPL_Command_compare(playerid);
     if (!strcmp(cmdtext,"/mpstatus",true)) return MPL_Command_status(playerid);
+    if (!strcmp(cmdtext,"/mpcache",true)) return MPL_Command_cache(playerid);
     if (!strcmp(cmdtext,"/mpliveoff",true)) return MPL_Command_liveoff(playerid);
     if (!strcmp(cmdtext,"/mpliveon",true)) return MPL_Command_liveon(playerid);
     return 0;

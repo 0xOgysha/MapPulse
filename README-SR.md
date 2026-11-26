@@ -6,7 +6,7 @@
 
 **Adaptivno učitavanje mapa i inteligentna prioritizacija objekata za SA-MP i open.mp.**
 
-![Verzija](https://img.shields.io/badge/version-0.8.0-blue)
+![Verzija](https://img.shields.io/badge/version-0.9.0-blue)
 ![Jezik](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Platforme](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse je lagana Pawn ekstenzija izgrađena na postojećem Incognito Streamer 
 
 Projekat je zasnovan na jednostavnom principu: **automatska optimizacija, bez potrebe da igrači ručno učitavaju mape.** MapPulse ne zamenjuje Streamer, već predstavlja dodatni sloj za upravljanje njegovim ponašanjem u postojećim gamemode skriptama.
 
-> **Status razvoja:** v0.8.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Pre produkcijske primene testirajte sistem na probnom serveru.
+> **Status razvoja:** v0.9.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Pre produkcijske primene testirajte sistem na probnom serveru.
 
 ## Sadržaj
 
@@ -138,7 +138,7 @@ MapPulse podešavanja se kompajliraju u skripte; navedena serverska konfiguracij
 | `filterscripts/mappulse.pwn` | Ulazna tačka filterscripta, callbackovi životnog ciklusa, opcione nativne komande i odgovori na dialog |
 | `filterscripts/mappulse_live.inc` | Raspoređivanje igrača, procena kretanja, politika radijusa, dijagnostika, A/B testovi i komande |
 | `include/mappulse_maps.inc` | Funkcije za preusmeravanje kreiranja dinamičkih objekata, klasifikacija modela, politika kreiranja i brojači |
-| `include/mappulse_settings.inc` | Svih 60 korisnička DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
+| `include/mappulse_settings.inc` | Svih 65 korisničkih DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
 
 ```mermaid
 flowchart TD
@@ -156,7 +156,7 @@ Dva modula se dopunjuju. Include upravlja parametrima odgovarajućih objekata pr
 
 ## Matematički pristup
 
-Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v0.8.0, a ne izmerene rezultate performansi.
+Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v0.9.0, a ne izmerene rezultate performansi.
 
 ### 1. Kvadrat euklidske udaljenosti i brzine
 
@@ -211,13 +211,32 @@ Podrazumevana politika menja samo pozive sa prioritetom `0`, pozitivnom udaljeno
 | Lista modela visokog prioriteta | `3` |
 | Lista modela srednjeg prioriteta | `2` |
 | Odabrani dekorativni model (`14400`) | Udaljenost streaminga × `0.85`, uz ograničenja |
-| Ostali modeli ili eksplicitni nenulti prioritet | Originalni parametri |
+| Poznati strukturni modeli bez pravila | Geometrijski prioritet prema skoru |
+| Nepoznati modeli ili eksplicitan prioritet različit od nule | Originalni parametri |
 
 Liste modela su podesive i treba ih proveriti za mape svakog servera. ID modela nije dokaz da objekat u konkretnoj sceni predstavlja pod, zid ili isključivo dekoraciju. Podrazumevane liste obuhvataju odabrane građevinske modele, ne sve moguće konstrukcije.
 
 Za pravilo dekoracija originalna udaljenost streaminga mora biti između 120 i 500 jedinica. Predložena udaljenost je najveća od sledećih vrednosti: 85% originalne udaljenosti, 120 jedinica i zadati draw distance. Promena se primenjuje samo ako smanjenje prelazi 5 jedinica. Sam draw distance se ne menja.
 
 Funkcije čuvaju pozicije, rotacije, ograničenja sveta/enterijera/igrača/oblasti i eksplicitne nenulte prioritete. Ne prepoznaju automatski kapije koje će se kasnije pomerati niti zakačene objekte; proverite te modele ako ih gamemode koristi. Objekti kreirani običnim `CreateObject` nisu obuhvaćeni politikom.
+
+### Model Cache i geometrijska klasifikacija (v0.9.0)
+
+Bez dodatnih zavisnosti. MapPulse ima sopstvenu malu početnu tabelu od osam proverenih strukturnih modela; **nije kompletna baza svih GTA:SA modela**. Čuvaju se samo preporuke prioriteta po modelu, ne pozicije, rotacije, niti objekti. Postojeći ručno dodeljeni prioritet i liste modela imaju prednost. Nepoznati modeli bez postojećeg pravila ostaju nepromenjeni. Geometrija ne menja stream/draw distance; ranije selektivno pravilo dekoracije ostaje nezavisno.
+
+Za dimenzije x, y, z u metrima, skor je $S=xy+yz+zx$. S >= 70 daje visoki prioritet, S >= 10 srednji; ispod praga nema promene. Skor je heuristika, ne dokaz kolizione važnosti.
+
+Cache koristi direktno mapiranje model ID modulo broj slotova, sa proverom kompletnog ključa. Sudar zamenjuje slot; nema pogrešnog korišćenja prioriteta drugog modela. Čuvaju se i nulte preporuke. Podrazumevanih 4096 slotova zauzima 32768 B za dva niza (bez drugih promenljivih/AMX overhead-a). Cache ne radi po igraču niti na timeru. Pogoci i promašaji obuhvataju samo kvalifikovane pozive politike prioriteta; popunjeni slotovi nisu broj svih jedinstvenih modela. /mpcache je RCON komanda koja očitava statistiku iz map AMX-a, ne iz duplirane baze. Podržana je jedna map AMX skripta; ako više skripti izloži isti callback, CallRemoteFunction ne garantuje zbir.
+
+| Podešavanje | Podrazumevano | Namena |
+|---|---|---|
+| MPM_MODEL_CACHE | 1 | Uključuje keširanje |
+| MPM_CACHE_MAX_MODELS | 4096 | Broj slotova (64–32768) |
+| MPM_AUTO_CLASSIFY | 1 | Uključuje geometrijsku klasifikaciju poznatih modela |
+| MPM_GEOMETRY_HIGH | 70.0 | Visoki prag skora |
+| MPM_GEOMETRY_MEDIUM | 10.0 | Srednji prag skora |
+
+Izvori pojedinačnih dimenzija: Prineside DevTools – [19353](https://dev.prineside.com/en/gtasa_samp_model_id/model/19353-wall001/), [19377](https://dev.prineside.com/en/gtasa_samp_model_id/model/19377-wall025/), [19378](https://dev.prineside.com/en/gtasa_samp_model_id/model/19378-wall026/), [19379](https://dev.prineside.com/en/gtasa_samp_model_id/model/19379), [19454](https://dev.prineside.com/en/gtasa_samp_model_id/model/19454), [19455](https://dev.prineside.com/gtasa_samp_model_id/model/19455-wall095/), [19456](https://dev.prineside.com/gtasa_samp_model_id/model/19456-wall096/), [18762](https://dev.prineside.com/en/gtasa_samp_model_id/model/18762-Concrete1mx1mx5m/). Idejna inspiracija: [OptiDraw](https://github.com/algorhitmically/optidraw); implementacija je samostalna, bez ModelSizes/YSI i bez preuzimanja njihove baze. Za širenje baze potrebno je proveriti dimenzije i prava redistribucije.
 
 ## Podešavanja
 
@@ -337,6 +356,7 @@ Sve komande zahtevaju RCON administratorski pristup preko `IsPlayerAdmin`. Namen
 | `/mpon` | Pokretanje testa B sa adaptivnom individualnom optimizacijom |
 | `/mpoff` | Završetak aktivnog testa, prikaz i opciono čuvanje rezultata |
 | `/mpcompare` | Prikaz sačuvanih A/B rezultata |
+| `/mpcache` | Statistika model cache-a iz gamemode-a |
 | `/mpliveon` | Aktiviranje automatske individualne optimizacije za sve igrače |
 | `/mpliveoff` | Isključivanje individualne optimizacije, zaustavljanje testova i postepeno vraćanje radijusa kojim MapPulse upravlja |
 
@@ -354,7 +374,7 @@ Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarn
 
 ### Automatska provera verzije MapPulse-a
 
-MapPulse v0.8.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
+MapPulse v0.9.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
 
 | Define | Vrednost | Namena |
 |---|---|---|
@@ -380,7 +400,7 @@ Izveštaj obuhvata broj uzoraka, prosečan/maksimalan broj vidljivih objekata, p
 
 Ugrađeno A/B poređenje izoluje individualnu politiku radijusa **uz istu politiku kreiranja mapa u oba testa**. Za procenu prioriteta i skraćivanja udaljenosti pri kreiranju, izvršite testove na odvojeno kompajliranim verzijama sa isključenim i uključenim `MPM_ENABLE`, uz ponovno kreiranje istih mapa između testova.
 
-Za v0.8.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
+Za v0.9.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
 
 ## Ograničenja i rešavanje problema
 

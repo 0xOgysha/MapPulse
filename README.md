@@ -6,7 +6,7 @@
 
 **Adaptive map streaming and intelligent object prioritization for SA-MP and open.mp.**
 
-![Version](https://img.shields.io/badge/version-0.8.0-blue)
+![Version](https://img.shields.io/badge/version-0.9.0-blue)
 ![Language](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Targets](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse is a lightweight Pawn extension built on top of the Incognito Streamer 
 
 The project was designed around a simple principle: **optimize automatically, without requiring players to reload maps manually.** MapPulse is not a replacement for Streamer; it provides an additional policy layer for existing gamemodes.
 
-> **Development status:** v0.8.0 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. Test on a staging server before production deployment.
+> **Development status:** v0.9.0 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. Test on a staging server before production deployment.
 
 ## Contents
 
@@ -138,7 +138,7 @@ MapPulse settings are compiled into the scripts; the server configuration above 
 | `filterscripts/mappulse.pwn` | Filterscript entry point, lifecycle callbacks, optional native command dispatch and dialog responses |
 | `filterscripts/mappulse_live.inc` | Player scheduler, movement estimation, radius policy, diagnostics, A/B tests and commands |
 | `include/mappulse_maps.inc` | Dynamic object wrappers, model classification, creation policy and counters |
-| `include/mappulse_settings.inc` | All 60 user-configurable defines, compile-time validation and dependency checks |
+| `include/mappulse_settings.inc` | All 65 user-configurable defines, compile-time validation and dependency checks |
 
 ```mermaid
 flowchart TD
@@ -156,7 +156,7 @@ The two modules complement each other. The include controls eligible object para
 
 ## Mathematical approach
 
-MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v0.8.0 policy, not measured performance results.
+MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v0.9.0 policy, not measured performance results.
 
 ### 1. Squared Euclidean distance and speed
 
@@ -211,13 +211,32 @@ The default map policy only modifies creation calls with priority `0`, positive 
 | High-priority model list | `3` |
 | Medium-priority model list | `2` |
 | Selected decorative model (`14400`) | Stream distance × `0.85`, subject to bounds |
-| Other models or explicit nonzero priority | Original parameters |
+| Known structural models without a list rule | Geometry-based priority |
+| Unknown models or explicit nonzero priority | Original parameters |
 
 The model lists are configurable and should be reviewed for each server's maps. Model IDs are not proof that an object is a floor, wall or purely decorative item in a particular scene. The default lists include selected construction models, not all possible structural objects.
 
 For the decorative rule, the original stream distance must be between 120 and 500 units. The proposed distance is the maximum of 85% of the original distance, 120 units and the supplied draw distance. The change is applied only if the reduction exceeds 5 units. Draw distance itself is not changed.
 
 The wrappers preserve positions, rotations, world/interior/player/area restrictions and explicit nonzero priorities. They do not automatically identify future moving gates or attached objects; review those models if your gamemode uses them. Objects created with ordinary `CreateObject` are outside this policy.
+
+### Model Cache and geometry classification (v0.9.0)
+
+No new dependencies. MapPulse contains a small starter table of eight verified structural models, **not a complete GTA:SA model database**. It caches only model-level priority recommendations, not positions, rotations or object instances. Explicit priorities and existing configured model lists take precedence. Unknown models without existing rules remain unchanged. Geometry does not alter streaming or draw distances; the existing selective decoration rule remains independent.
+
+For dimensions x, y, z in meters, the score is $S=xy+yz+zx$. S >= 70 receives high priority, S >= 10 medium priority; lower scores are unchanged. The score is a heuristic, not proof of collision importance.
+
+The direct-mapped cache uses model ID modulo slot count, checking the complete key. Collisions replace a slot, never reuse the wrong model's result. Zero recommendations are cached. The default 4096 slots require 32768 B for two arrays, excluding other variables/AMX overhead. Cache work occurs on object creation, not per player or on timers. Hits and misses cover only eligible priority-policy calls; occupied slots are not a count of all unique models. /mpcache is an RCON command reading statistics from the map AMX rather than duplicating its database. A single map AMX is supported; if several scripts expose the callback, CallRemoteFunction is not an aggregate.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| MPM_MODEL_CACHE | 1 | Enable model caching |
+| MPM_CACHE_MAX_MODELS | 4096 | Slots (64–32768) |
+| MPM_AUTO_CLASSIFY | 1 | Enable geometry classification of known models |
+| MPM_GEOMETRY_HIGH | 70.0 | High-priority score threshold |
+| MPM_GEOMETRY_MEDIUM | 10.0 | Medium-priority score threshold |
+
+Individual dimension references: Prineside DevTools – [19353](https://dev.prineside.com/en/gtasa_samp_model_id/model/19353-wall001/), [19377](https://dev.prineside.com/en/gtasa_samp_model_id/model/19377-wall025/), [19378](https://dev.prineside.com/en/gtasa_samp_model_id/model/19378-wall026/), [19379](https://dev.prineside.com/en/gtasa_samp_model_id/model/19379), [19454](https://dev.prineside.com/en/gtasa_samp_model_id/model/19454), [19455](https://dev.prineside.com/gtasa_samp_model_id/model/19455-wall095/), [19456](https://dev.prineside.com/gtasa_samp_model_id/model/19456-wall096/), [18762](https://dev.prineside.com/en/gtasa_samp_model_id/model/18762-Concrete1mx1mx5m/). Conceptual inspiration: [OptiDraw](https://github.com/algorhitmically/optidraw); this is an independent implementation, with no ModelSizes/YSI dependency or imported database. Expand only with verified dimensions and redistribution rights.
 
 ## Configuration
 
@@ -336,6 +355,7 @@ All commands require RCON administrator access through `IsPlayerAdmin`. They are
 | `/mpon` | Start test B with adaptive individual optimization |
 | `/mpoff` | Finish the active test, display and optionally save results |
 | `/mpcompare` | Display stored A/B results |
+| `/mpcache` | Model cache statistics from the gamemode |
 | `/mpliveon` | Enable automatic individual optimization for all players |
 | `/mpliveoff` | Disable individual optimization, stop active tests and gradually restore owned radius settings |
 
@@ -353,7 +373,7 @@ Pawn does not expose a dependable binary-version getter through these dependenci
 
 ### Automatic MapPulse version check
 
-MapPulse v0.8.0 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
+MapPulse v0.9.0 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
 
 | Define | Default | Purpose |
 |---|---|---|
@@ -379,7 +399,7 @@ The report includes sample count, mean/peak visible objects, configured limit, o
 
 The built-in A/B comparison isolates the individual radius policy **with the same creation-time map policy in both runs**. To evaluate creation-time priorities and distance trimming, run separate server builds with `MPM_ENABLE` disabled and enabled, recreating the same maps between tests.
 
-No verified FPS or CPU improvement percentage is published for v0.8.0. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
+No verified FPS or CPU improvement percentage is published for v0.9.0. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
 
 ## Limitations and troubleshooting
 
