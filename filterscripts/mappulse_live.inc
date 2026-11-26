@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_live.inc | MapPulse v1.0.0
+ * mappulse_live.inc | MapPulse v1.0.1
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,11 +20,13 @@
 #if MPL_USE_PAWNCMD
     #include <Pawn.CMD>
 #endif
-#define MPL_BUILD_CODE (1000000)
+#define MPL_BUILD_CODE (1000001)
 new bool:MPL_Ready;
 new MPL_Active[MAX_PLAYERS], MPL_ActiveIndex[MAX_PLAYERS], MPL_ActiveCount;
 new MPL_SampleTotal, MPL_PollTotal, MPL_PollPeak, MPL_PollLimited;
 new MPL_Stable[MAX_PLAYERS], MPL_Tier[MAX_PLAYERS];
+new MPL_HighSamples[MAX_PLAYERS], MPL_LowSamples[MAX_PLAYERS], MPL_ReductionCount[MAX_PLAYERS], MPL_RecoveryCount[MAX_PLAYERS];
+new MPL_LastReason[MAX_PLAYERS];
 new Float:MPL_SpeedSq[MAX_PLAYERS];
 new bool:MPL_ReportOpen[MAX_PLAYERS];
 new MPL_Timer, bool:MPL_Enabled = (MPL_START_ENABLED != 0), MPL_Cursor;
@@ -33,7 +35,8 @@ new bool:MPL_Known[MAX_PLAYERS], bool:MPL_Owned[MAX_PLAYERS], bool:MPL_Conflict[
 new Float:MPL_Base[MAX_PLAYERS], Float:MPL_Applied[MAX_PLAYERS];
 new Float:MPL_X[MAX_PLAYERS], Float:MPL_Y[MAX_PLAYERS], Float:MPL_Z[MAX_PLAYERS], Float:MPL_Speed[MAX_PLAYERS];
 new MPL_Last[MAX_PLAYERS], MPL_World[MAX_PLAYERS], MPL_Interior[MAX_PLAYERS], MPL_Adjust[MAX_PLAYERS];
-new MPL_Test[MAX_PLAYERS]; 
+new MPL_Test[MAX_PLAYERS];
+new Float:MPL_TestMinRadius[MAX_PLAYERS][2]; 
 new MPL_Samples[MAX_PLAYERS][2], MPL_Full[MAX_PLAYERS][2], MPL_Peak[MAX_PLAYERS][2], MPL_TestChanges[MAX_PLAYERS][2];
 new MPL_TestJumps[MAX_PLAYERS][2], MPL_TestLimit[MAX_PLAYERS][2], bool:MPL_TestLimitChanged[MAX_PLAYERS][2];
 new Float:MPL_Mean[MAX_PLAYERS][2], Float:MPL_Use[MAX_PLAYERS][2], Float:MPL_Route[MAX_PLAYERS][2], Float:MPL_MaxSpeed[MAX_PLAYERS][2];
@@ -65,13 +68,14 @@ stock MPL_ResetTest(p,slot)
     MPL_Samples[p][slot]=0; MPL_Full[p][slot]=0; MPL_Peak[p][slot]=0;
     MPL_Mean[p][slot]=0.0; MPL_Use[p][slot]=0.0; MPL_Route[p][slot]=0.0; MPL_MaxSpeed[p][slot]=0.0;
     MPL_TestChanges[p][slot]=0; MPL_TestJumps[p][slot]=0;
-    MPL_TestLimit[p][slot]=0; MPL_TestLimitChanged[p][slot]=false;
+    MPL_TestLimit[p][slot]=0; MPL_TestLimitChanged[p][slot]=false; MPL_TestMinRadius[p][slot]=0.0;
     return 1;
 }
 stock MPL_PlayerReset(p)
 {
     MPL_ReportOpen[p]=false; MPL_Known[p]=false; MPL_Owned[p]=false; MPL_Conflict[p]=false; MPL_Position[p]=false; MPL_Pressure[p]=false;
     MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_SpeedSq[p]=0.0; MPL_Base[p]=0.0; MPL_Applied[p]=0.0; MPL_Last[p]=0; MPL_Adjust[p]=0; MPL_Test[p]=0; MPL_Speed[p]=0.0;
+    MPL_HighSamples[p]=0; MPL_LowSamples[p]=0; MPL_ReductionCount[p]=0; MPL_RecoveryCount[p]=0; MPL_LastReason[p]=0;
     MPL_ResetTest(p,0); MPL_ResetTest(p,1);
     return 1;
 }
@@ -210,6 +214,8 @@ stock MPL_Shutdown()
 stock MPL_Sample(p,slot,visible,limit,Float:x,Float:y,Float:dist,bool:jump)
 {
     new n=++MPL_Samples[p][slot];
+    new Float:sampleRadius;
+    if (Streamer_GetRadiusMultiplier(STREAMER_TYPE_OBJECT,sampleRadius,p) && sampleRadius>0.0 && (MPL_TestMinRadius[p][slot]<=0.0 || sampleRadius<MPL_TestMinRadius[p][slot])) MPL_TestMinRadius[p][slot]=sampleRadius;
     MPL_Mean[p][slot]+=(float(visible)-MPL_Mean[p][slot])/float(n);
     MPL_Use[p][slot]+=(100.0*float(visible)/float(limit)-MPL_Use[p][slot])/float(n);
     if (visible>=limit) MPL_Full[p][slot]++;
@@ -227,6 +233,52 @@ stock MPL_Sample(p,slot,visible,limit,Float:x,Float:y,Float:dist,bool:jump)
     if (MPL_Speed[p]>MPL_MaxSpeed[p][slot]) MPL_MaxSpeed[p][slot]=MPL_Speed[p];
     return 1;
 }
+stock MPL_ResetPressureSamples(p)
+{
+    MPL_HighSamples[p]=0; MPL_LowSamples[p]=0;
+    return 1;
+}
+
+stock bool:MPL_WriteRadius(p,now,Float:current,Float:target,reason)
+{
+    // Do not let an unusually small baseline make the final bounded step unreachable.
+    new Float:minimum=MPL_MIN_CHANGE;
+    #if MPL_ADAPTIVE_REDUCTION
+        if (reason==1 || reason==2)
+        {
+            new Float:halfStep=MPL_Base[p]*float(MPL_REDUCTION_STEP)/200.0;
+            if (halfStep<minimum) minimum=halfStep;
+        }
+    #endif
+    if (minimum<MPL_EPS) minimum=MPL_EPS;
+    if (floatabs(current-target)<minimum) return false;
+    if (!Streamer_SetRadiusMultiplier(STREAMER_TYPE_OBJECT,target,p)) return false;
+    MPL_Applied[p]=target;
+    MPL_Owned[p]=(floatabs(target-MPL_Base[p])>=MPL_EPS);
+    MPL_Adjust[p]=now;
+    MPL_LastReason[p]=reason;
+    if (reason==1) MPL_ReductionCount[p]++;
+    else if (reason==2) MPL_RecoveryCount[p]++;
+    if (MPL_Test[p]) MPL_TestChanges[p][MPL_Test[p]-1]++;
+    return true;
+}
+
+stock MPL_ReasonText(p,output[],size)
+{
+    switch (MPL_LastReason[p])
+    {
+        case 1: format(output,size,"Smanjenje: visok pritisak");
+        case 2: format(output,size,"Oporavak radijusa");
+        case 3: format(output,size,"Podesavanje po brzini");
+        case 4: format(output,size,"Donja granica");
+        case 5: format(output,size,"Ceka stabilne uzorke");
+        case 6: format(output,size,"Zadrzava smanjeni radijus");
+        case 7: format(output,size,"Vracanje: bezbednosni uslov");
+        default: format(output,size,"Bez promene / bazni");
+    }
+    return 1;
+}
+
 stock MPL_TickPlayer(p,now)
 {
     new dt=now-MPL_Last[p];
@@ -237,7 +289,7 @@ stock MPL_TickPlayer(p,now)
     MPL_Last[p]=now;
     if (!MPL_Enabled && !MPL_Test[p])
     {
-        MPL_Restore(p);
+        MPL_Restore(p); MPL_ResetPressureSamples(p); MPL_LastReason[p]=7;
         MPL_Position[p]=false;
         return 1;
     }
@@ -246,7 +298,7 @@ stock MPL_TickPlayer(p,now)
     {
         if (MPL_Test[p] && MPL_Position[p]) MPL_TestJumps[p][MPL_Test[p]-1]++;
         MPL_Position[p]=false; MPL_SpeedSq[p]=0.0; MPL_Speed[p]=0.0;
-        MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_Restore(p);
+        MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_Restore(p); MPL_ResetPressureSamples(p); MPL_LastReason[p]=7;
         return 1;
     }
     new Float:x, Float:y, Float:z;
@@ -274,7 +326,7 @@ stock MPL_TickPlayer(p,now)
     if (MPL_Test[p]) MPL_Speed[p]=floatsqroot(MPL_SpeedSq[p]);
     if (!MPL_Test[p] && !MPL_Owned[p] && (interior!=0 || MPL_SpeedSq[p]<MPL_WALK_SPEED*MPL_WALK_SPEED || jump))
     {
-        MPL_Stable[p]=0; MPL_Tier[p]=0;
+        MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_ResetPressureSamples(p);
         return 1;
     }
     new visible=Streamer_CountVisibleItems(p,STREAMER_TYPE_OBJECT,1), limit=Streamer_GetVisibleItems(STREAMER_TYPE_OBJECT,p);
@@ -282,7 +334,7 @@ stock MPL_TickPlayer(p,now)
     if (MPL_Test[p]) MPL_Sample(p,MPL_Test[p]-1,visible,limit,x,y,floatsqroot(distSq),jump);
     if (!MPL_Enabled || MPL_Test[p]==1 || interior!=0 || MPL_Conflict[p] || jump)
     {
-        MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_Restore(p);
+        MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_Restore(p); MPL_ResetPressureSamples(p); MPL_LastReason[p]=7;
         return 1;
     }
     new Float:current;
@@ -294,14 +346,74 @@ stock MPL_TickPlayer(p,now)
         return 1;
     }
     if (!MPL_Owned[p]) { MPL_Base[p]=current; MPL_Applied[p]=current; }
-    if (visible*100>=limit*MPL_PRESSURE_HIGH) MPL_Pressure[p]=true;
-    else if (visible*100<=limit*MPL_PRESSURE_LOW) MPL_Pressure[p]=false;
+    if (visible*100>=limit*MPL_PRESSURE_HIGH)
+    {
+        MPL_Pressure[p]=true;
+        if (MPL_HighSamples[p]<MPL_STABLE_SAMPLES) MPL_HighSamples[p]++;
+        MPL_LowSamples[p]=0;
+    }
+    else if (visible*100<=limit*MPL_PRESSURE_LOW)
+    {
+        MPL_Pressure[p]=false;
+        MPL_HighSamples[p]=0;
+        if (MPL_LowSamples[p]<MPL_STABLE_SAMPLES) MPL_LowSamples[p]++;
+    }
+    else MPL_ResetPressureSamples(p);
+
+    #if MPL_ADAPTIVE_REDUCTION
+        // Reduction is deliberately narrower than the existing speed-based expansion.
+        new reductionState=GetPlayerState(p);
+        new bool:canReduce=(world==0 && interior==0 &&
+            (reductionState==PLAYER_STATE_DRIVER || reductionState==PLAYER_STATE_PASSENGER) &&
+            MPL_SpeedSq[p]>=MPL_DRIVE_SPEED*MPL_DRIVE_SPEED);
+        new bool:belowBase=(current<MPL_Base[p]-MPL_EPS);
+        if (belowBase && !canReduce)
+        {
+            MPL_ResetPressureSamples(p); MPL_Stable[p]=0; MPL_Tier[p]=0;
+            MPL_LastReason[p]=7;
+            if (MPL_Owned[p] && MPL_Restore(p) && !MPL_Conflict[p])
+            {
+                MPL_Adjust[p]=now;
+                MPL_RecoveryCount[p]++;
+                if (MPL_Test[p]) MPL_TestChanges[p][MPL_Test[p]-1]++;
+            }
+            return 1;
+        }
+        if (canReduce && (MPL_Pressure[p] || belowBase))
+        {
+            MPL_Stable[p]=0; MPL_Tier[p]=0;
+            new Float:floor=MPL_Base[p]*float(MPL_REDUCTION_FLOOR)/100.0;
+            new Float:step=MPL_Base[p]*float(MPL_REDUCTION_STEP)/100.0;
+            new bool:ready=(!MPL_Adjust[p] || now-MPL_Adjust[p]>=MPL_ADJUST_MS);
+            if (MPL_Pressure[p])
+            {
+                // A saturated count is censored at the visible limit, not a density measurement.
+                // Probe in bounded steps instead of trusting the area estimate at saturation.
+                if (current<=floor+MPL_EPS) { MPL_LastReason[p]=4; return 1; }
+                if (MPL_HighSamples[p]<MPL_STABLE_SAMPLES || !ready) { MPL_LastReason[p]=5; return 1; }
+                new Float:target=current-step;
+                if (current>MPL_Base[p]) target=MPL_Base[p];
+                if (target<floor) target=floor;
+                if (MPL_WriteRadius(p,now,current,target,1)) MPL_ResetPressureSamples(p);
+                return 1;
+            }
+            // Under the low threshold, recover a single step only if the area estimate permits.
+            MPL_LastReason[p]=6;
+            if (MPL_LowSamples[p]<MPL_STABLE_SAMPLES || !ready) return 1;
+            new Float:target=current+step;
+            if (target>MPL_Base[p]) target=MPL_Base[p];
+            new Float:relative=target/current;
+            if (float(visible)*relative*relative>float(limit)*float(MPL_TARGET_OCCUPANCY)/100.0) return 1;
+            if (MPL_WriteRadius(p,now,current,target,2)) MPL_ResetPressureSamples(p);
+            return 1;
+        }
+    #endif
     if (MPL_Pressure[p] || MPL_SpeedSq[p]<MPL_WALK_SPEED*MPL_WALK_SPEED)
     {
         MPL_Stable[p]=0; MPL_Tier[p]=0;
-        if (MPL_Owned[p] && MPL_Restore(p))
+        if (MPL_Owned[p] && MPL_Restore(p) && !MPL_Conflict[p])
         {
-            MPL_Adjust[p]=now;
+            MPL_Adjust[p]=now; MPL_LastReason[p]=7;
             if (MPL_Test[p]) MPL_TestChanges[p][MPL_Test[p]-1]++;
         }
         return 1;
@@ -326,14 +438,7 @@ stock MPL_TickPlayer(p,now)
     if (factor<1.0) factor=1.0;
     new Float:target=MPL_Base[p]*factor;
     if (target>MPL_MAX_MULTIPLIER && target>MPL_Base[p]) target=(MPL_Base[p]>MPL_MAX_MULTIPLIER)?MPL_Base[p]:MPL_MAX_MULTIPLIER;
-    if (floatabs(current-target)>=MPL_MIN_CHANGE)
-    {
-        if (Streamer_SetRadiusMultiplier(STREAMER_TYPE_OBJECT,target,p))
-        {
-            MPL_Applied[p]=target; MPL_Owned[p]=(floatabs(target-MPL_Base[p])>=MPL_EPS); MPL_Adjust[p]=now;
-            if (MPL_Test[p]) MPL_TestChanges[p][MPL_Test[p]-1]++;
-        }
-    }
+    MPL_WriteRadius(p,now,current,target,3);
     return 1;
 }
 public MPL_Poll()
@@ -386,13 +491,14 @@ stock MPL_ABCell(p,slot,metric,output[],size)
         case 7: format(output,size,"%.0f km/h",MPL_MaxSpeed[p][slot]);
         case 8: format(output,size,"%d",MPL_TestChanges[p][slot]);
         case 9: format(output,size,"%d",MPL_TestJumps[p][slot]);
+        case 10: { if (MPL_TestMinRadius[p][slot]>0.0) format(output,size,"%.3f",MPL_TestMinRadius[p][slot]); else format(output,size,"-"); }
     }
     return 1;
 }
 stock MPL_Compare(p,bool:save)
 {
     new body[2200], line[240], left[40], right[40];
-    new const metrics[][]={"Uzorci","Prosek objekata","Maks. objekata","Limit","Popunjenost","Pun kapacitet","Duzina rute","Maks. brzina","Promene radijusa","Skokovi"};
+    new const metrics[][]={"Uzorci","Prosek objekata","Maks. objekata","Limit","Popunjenost","Pun kapacitet","Duzina rute","Maks. brzina","Promene radijusa","Skokovi","Min. radijus"};
     format(body,sizeof body,"{73BFFF}Metrika\t{E8EDF4}A - Original\t{75D69C}B - MapPulse\n");
     for (new i=0;i<sizeof metrics;i++)
     {
@@ -431,6 +537,7 @@ stock MPL_Begin(p,slot)
     if (MPL_Test[p]) return SendClientMessage(p,MPL_COLOR,"[MP] Prvo zavrsi prethodni test: /mpoff.");
     if (!MPL_Known[p]) { MPL_PlayerReset(p); MPL_Known[p]=true; }
     if (!MPL_Restore(p)) return SendClientMessage(p,MPL_COLOR,"[MP] Nije uspelo vracanje radijusa; test nije pokrenut.");
+    MPL_ResetPressureSamples(p); MPL_Adjust[p]=0; MPL_LastReason[p]=0;
     MPL_Stable[p]=0; MPL_Tier[p]=0; MPL_SpeedSq[p]=0.0; MPL_Pressure[p]=false; MPL_ResetTest(p,slot); MPL_Test[p]=slot+1; MPL_Position[p]=false; MPL_Speed[p]=0.0; MPL_Last[p]=0;
     if (slot==0) SendClientMessage(p,MPL_COLOR,"[MP] A: bazni radijus samo za tebe; globalna politika ostaje ista.");
     else SendClientMessage(p,MPL_COLOR,"[MP] B: MapPulse LIVE. Ponovi rutu A.");
@@ -447,6 +554,7 @@ stock MPL_Command_on(playerid)
 stock MPL_Command_off(playerid)
 {
     if (!MPL_Admin(playerid)) return 1;
+    MPL_ResetPressureSamples(playerid);
     MPL_Test[playerid]=0; MPL_Position[playerid]=false; MPL_Pressure[playerid]=false; MPL_Stable[playerid]=0; MPL_Tier[playerid]=0; MPL_SpeedSq[playerid]=0.0; MPL_Last[playerid]=0;
     SendClientMessage(playerid,MPL_COLOR,"[MP] Test zavrsen. Automatski LIVE rezim nastavlja ako je ukljucen.");
     return MPL_Compare(playerid,true);
@@ -459,16 +567,24 @@ stock MPL_Command_compare(playerid)
 stock MPL_Command_status(playerid)
 {
     if (!MPL_Admin(playerid)) return 1;
-    new body[1800], line[350], update[48], Float:radius, Float:base;
+    new body[2200], line[420], update[48], reason[48], pressure[32], Float:radius, Float:base;
+    new visible=Streamer_CountVisibleItems(playerid,STREAMER_TYPE_OBJECT,1), limit=Streamer_GetVisibleItems(STREAMER_TYPE_OBJECT,playerid);
+    if (limit<=0 || visible<0) format(pressure,sizeof pressure,"{F6C85F}NEPOZNATO");
+    else if (visible>=limit) format(pressure,sizeof pressure,"{F08A8A}PUN KAPACITET");
+    else if (visible*100>=limit*MPL_PRESSURE_HIGH) format(pressure,sizeof pressure,"{F6C85F}VISOKO");
+    else format(pressure,sizeof pressure,"{75D69C}NORMALNO");
+    MPL_ReasonText(playerid,reason,sizeof reason);
     Streamer_GetRadiusMultiplier(STREAMER_TYPE_OBJECT,radius,playerid);
     base=MPL_Owned[playerid]?MPL_Base[playerid]:radius;
     MPV_Status(update,sizeof update);
     format(body,sizeof body,"{73BFFF}Kategorija\t{73BFFF}Parametar\t{73BFFF}Vrednost\n{C0CCD9}Sistem\tVerzija\t{FFFFFF}%s\n{C0CCD9}Sistem\tAutor\t{FFFFFF}%s\n{C0CCD9}Sistem\tNadogradnja\t%s\n{C0CCD9}Sistem\tAutomatski rezim\t%s\n",MPV_VERSION,MPV_AUTHOR,update,MPL_Enabled?"{75D69C}AKTIVAN":"{F08A8A}ISKLJUCEN");
-    format(line,sizeof line,"{C0CCD9}Streaming\tRadijus / bazni\t{FFFFFF}%.2f / %.2f\n{C0CCD9}Streaming\tBrzina\t{FFFFFF}%.0f km/h\n{C0CCD9}Streaming\tObjekti / limit\t{FFFFFF}%d / %d\n{C0CCD9}Streaming\tZasicenje\t%s\n{C0CCD9}Streaming\tKonflikt\t%s\n{C0CCD9}Streaming\tA/B test\t{FFFFFF}%d\n",radius,base,floatsqroot(MPL_SpeedSq[playerid]),Streamer_CountVisibleItems(playerid,STREAMER_TYPE_OBJECT,1),Streamer_GetVisibleItems(STREAMER_TYPE_OBJECT,playerid),MPL_Pressure[playerid]?"{F6C85F}VISOKO":"{75D69C}NORMALNO",MPL_Conflict[playerid]?"{F08A8A}DA":"{75D69C}NE",MPL_Test[playerid]);
+    format(line,sizeof line,"{C0CCD9}Streaming\tRadijus / bazni\t{FFFFFF}%.2f / %.2f\n{C0CCD9}Streaming\tBrzina\t{FFFFFF}%.0f km/h\n{C0CCD9}Streaming\tObjekti / limit\t{FFFFFF}%d / %d\n{C0CCD9}Streaming\tZasicenje\t%s\n{C0CCD9}Streaming\tKonflikt\t%s\n{C0CCD9}Streaming\tA/B test\t{FFFFFF}%d\n",radius,base,floatsqroot(MPL_SpeedSq[playerid]),visible,limit,pressure,MPL_Conflict[playerid]?"{F08A8A}DA":"{75D69C}NE",MPL_Test[playerid]);
     strcat(body,line,sizeof body);
     format(line,sizeof line,"{C0CCD9}Scheduler\tIgraci\t{FFFFFF}%d\n{C0CCD9}Scheduler\tObrade\t{FFFFFF}%d\n{C0CCD9}Scheduler\tProlazi\t{FFFFFF}%d\n{C0CCD9}Scheduler\tNajduzi prolaz\t{FFFFFF}%d ms\n{C0CCD9}Scheduler\tDostignut budzet\t{FFFFFF}%d\n",MPL_ActiveCount,MPL_SampleTotal,MPL_PollTotal,MPL_PollPeak,MPL_PollLimited);
     strcat(body,line,sizeof body);
     format(line,sizeof line,"{C0CCD9}Chunk\tAktivno u Streameru\t{FFFFFF}%d\n{C0CCD9}Chunk\tVelicina objekata\t{FFFFFF}%d\n{C0CCD9}Chunk\tMapPulse kontrola\t{FFFFFF}%d\n",Streamer_IsToggleChunkStream(),Streamer_GetChunkSize(STREAMER_TYPE_OBJECT),MPL_CHUNK_STREAM);
+    strcat(body,line,sizeof body);
+    format(line,sizeof line,"{C0CCD9}Adaptacija\tSmanjenje aktivno\t{FFFFFF}%d\n{C0CCD9}Adaptacija\tDonja granica baze\t{FFFFFF}%d%%\n{C0CCD9}Adaptacija\tSmanjenja / oporavci\t{FFFFFF}%d / %d\n{C0CCD9}Adaptacija\tPoslednje stanje\t{FFFFFF}%s\n",MPL_ADAPTIVE_REDUCTION,MPL_REDUCTION_FLOOR,MPL_ReductionCount[playerid],MPL_RecoveryCount[playerid],reason);
     strcat(body,line,sizeof body);
     return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Live Dashboard",body);
 }

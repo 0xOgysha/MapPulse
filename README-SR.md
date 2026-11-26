@@ -6,7 +6,7 @@
 
 **Adaptivno učitavanje mapa i inteligentna prioritizacija objekata za SA-MP i open.mp.**
 
-![Verzija](https://img.shields.io/badge/version-1.0.0-blue)
+![Verzija](https://img.shields.io/badge/version-1.0.1-blue)
 ![Jezik](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Platforme](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse je lagana Pawn ekstenzija izgrađena na postojećem Incognito Streamer 
 
 Projekat je zasnovan na jednostavnom principu: **automatska optimizacija, bez potrebe da igrači ručno učitavaju mape.** MapPulse ne zamenjuje Streamer, već predstavlja dodatni sloj za upravljanje njegovim ponašanjem u postojećim gamemode skriptama.
 
-> **Status razvoja:** v1.0.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Ovo je testna verzija 1.0.0, ne potvrđeno stabilno izdanje. Pre produkcijske primene testirajte sistem na probnom serveru.
+> **Status razvoja:** v1.0.1 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Ovo je testna verzija 1.0.1, ne potvrđeno stabilno izdanje. Pre produkcijske primene testirajte sistem na probnom serveru.
 
 ## Sadržaj
 
@@ -138,7 +138,7 @@ MapPulse podešavanja se kompajliraju u skripte; navedena serverska konfiguracij
 | `filterscripts/mappulse.pwn` | Ulazna tačka filterscripta, callbackovi životnog ciklusa, opcione nativne komande i odgovori na dialog |
 | `filterscripts/mappulse_live.inc` | Raspoređivanje igrača, procena kretanja, politika radijusa, dijagnostika, A/B testovi i komande |
 | `include/mappulse_maps.inc` | Funkcije za preusmeravanje kreiranja dinamičkih objekata, klasifikacija modela, politika kreiranja i brojači |
-| `include/mappulse_settings.inc` | Svih 70 korisničkih DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
+| `include/mappulse_settings.inc` | Svih 73 korisničkih DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
 
 ```mermaid
 flowchart TD
@@ -156,7 +156,7 @@ Dva modula se dopunjuju. Include upravlja parametrima odgovarajućih objekata pr
 
 ## Matematički pristup
 
-Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v1.0.0, a ne izmerene rezultate performansi.
+Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v1.0.1, a ne izmerene rezultate performansi.
 
 ### 1. Kvadrat euklidske udaljenosti i brzine
 
@@ -198,7 +198,7 @@ Ova aproksimacija zasnovana na površini je heuristika. Guste grupe objekata, vi
 
 ### 4. Histereza i raspoređivanje
 
-Pri popunjenosti od 85% podrazumevana politika ulazi u stanje visokog opterećenja i vraća originalni radijus kada MapPulse upravlja tim podešavanjem. Popunjenost mora pasti na 60% ili manje pre ponovnog razmatranja povećanja. Redovne promene zahtevaju tri stabilna uzorka brzine, interval od šest sekundi između promena i minimalnu razliku multiplikatora.
+**Adaptive Streaming v2 (1.0.1).** Pri najmanje 85% popunjenosti, tri uzastopna visoka uzorka i razmaku od šest sekundi, radijus se smanjuje za najviše 5% baze po koraku (ako je iznad baze, prvo se vrati na bazu), najniže do 85% baze. Smanjenje je ograničeno na vozače/putnike pri brzini od najmanje MPL_DRIVE_SPEED u svetu 0, enterijeru 0. Broj vidljivih objekata na limitu je cenzurisan, pa se ne koristi kao tačna gustina. Radijus se zadržava između pragova; pri tri niska uzorka (<=60%) i dovoljnim vremenskim razmakom, oporavak ide korak po korak prema bazi ako procena površine ne prelazi cilj od 75%. Van uslova smanjenja (zaustavljanje, izlazak iz vozila, promena sveta/enterijera ili skok) vraća se bazni radijus kada je MapPulse vlasnik vrednosti. Ovo može uticati na vidljivost i koliziju; testirati pažljivo. Ako i na donjoj granici ostaje pun kapacitet, ne smanjuje se dalje. /mpstatus prikazuje trenutno zasićenje, granicu, brojače i razlog poslednjeg stanja; A/B beleži minimalni izmereni radijus. U A testu nema adaptacije. Isključivanje MPL_ADAPTIVE_REDUCTION vraća prethodnu politiku.
 
 Zajednički timer od 100 ms posećuje najviše 16 aktivnih slotova po prolazu, uz meki budžet od 2 ms. Redovni uzorci su udaljeni najmanje 1.5 sekundi; igrači koji miruju, ispunjavaju uslove i nemaju aktivnu promenu radijusa koriste interval od 2.5 sekundi. Lista aktivnih igrača koristi uklanjanje zamenom sa poslednjim elementom umesto skeniranja svih slotova pri svakom prolazu timera. Stvarni intervali mogu biti duži pod opterećenjem. Budžet se proverava nakon pojedinačnih operacija i nije stroga garancija izvršavanja u realnom vremenu.
 
@@ -220,7 +220,7 @@ Za pravilo dekoracija originalna udaljenost streaminga mora biti između 120 i 5
 
 Funkcije čuvaju pozicije, rotacije, ograničenja sveta/enterijera/igrača/oblasti i eksplicitne nenulte prioritete. Ne prepoznaju automatski kapije koje će se kasnije pomerati niti zakačene objekte; proverite te modele ako ih gamemode koristi. Objekti kreirani običnim `CreateObject` nisu obuhvaćeni politikom.
 
-### Model Cache i geometrijska klasifikacija (v1.0.0)
+### Model Cache i geometrijska klasifikacija (v1.0.1)
 
 Bez dodatnih zavisnosti. MapPulse ima sopstvenu malu početnu tabelu od osam preliminarnih strukturnih modela; **nije kompletna baza svih GTA:SA modela**. Čuvaju se samo preporuke prioriteta po modelu, ne pozicije, rotacije, niti objekti. Postojeći ručno dodeljeni prioritet i liste modela imaju prednost. Nepoznati modeli bez postojećeg pravila ostaju nepromenjeni. Geometrija ne menja stream/draw distance; ranije selektivno pravilo dekoracije ostaje nezavisno.
 
@@ -263,6 +263,12 @@ Chunk streaming je opcion (MPL_CHUNK_STREAM=0). Kada je uključen, FS nakon jedn
 | MPL_CHUNK_START_DELAY | 3000 | Odlaganje prvog podešavanja u ms |
 
 **Testiranje snega:** Sačuvajte stari AMX i podešavanja. Testirajte prvo bez MapPulse-a, zatim samo map include, zatim FS uz isključen chunk, pa chunk veličine 50 i 25. U svakoj varijanti ponovite uključivanje/isključivanje snega, vožnju istom rutom, teleport i reconnect. Beležite stvarni chunk size, vidljive objekte, /mpcache, /mpstatus, vreme pojavljivanja mape i klijentski crash log. Ne menjajte više parametara odjednom; ModelSizes nije potreban. Ako koristite centralizovane dialoge, zadržite autorizovani dialog bridge.
+
+| Novo podešavanje | Podrazumevano | Namena |
+|---|---|---|
+| MPL_ADAPTIVE_REDUCTION | 1 | Dozvoljava ograničeno smanjenje radijusa |
+| MPL_REDUCTION_FLOOR | 85 | Donja granica (% originalnog radijusa; 80–99) |
+| MPL_REDUCTION_STEP | 5 | Korak (% baze; 1–10, najviše razlika do granice) |
 
 ## Podešavanja
 
@@ -400,7 +406,7 @@ Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarn
 
 ### Automatska provera verzije MapPulse-a
 
-MapPulse v1.0.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
+MapPulse v1.0.1 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
 
 | Define | Vrednost | Namena |
 |---|---|---|
@@ -426,7 +432,7 @@ Izveštaj obuhvata broj uzoraka, prosečan/maksimalan broj vidljivih objekata, p
 
 Ugrađeno A/B poređenje izoluje individualnu politiku radijusa **uz istu politiku kreiranja mapa u oba testa**. Za procenu prioriteta i skraćivanja udaljenosti pri kreiranju, izvršite testove na odvojeno kompajliranim verzijama sa isključenim i uključenim `MPM_ENABLE`, uz ponovno kreiranje istih mapa između testova.
 
-Za v1.0.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
+Za v1.0.1 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
 
 ## Ograničenja i rešavanje problema
 

@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_settings.inc | MapPulse v1.0.0
+ * mappulse_settings.inc | MapPulse v1.0.1
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -44,8 +44,8 @@
 
 // PROVERA VERZIJE MAPPULSE-A
 
-#define MPV_VERSION "1.0.0" // Verzija paketa; ne menjati rucno.
-#define MPV_VERSION_CODE (1000000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_VERSION "1.0.1" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (1000001) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
 #define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
 
 #if !defined MPL_UPDATE_CHECK
@@ -149,7 +149,7 @@
     #define MPL_MAX_MULTIPLIER            (1.5)                  // Gornja granica povecanja multiplikatora; ne obara veci bazni radijus.
 #endif
 #if !defined MPL_PRESSURE_HIGH
-    #define MPL_PRESSURE_HIGH             (85)                   // Procenat popunjenosti pri kom se vraca originalni radijus.
+    #define MPL_PRESSURE_HIGH             (85)                   // Prag visoke popunjenosti za kontrolu radijusa.
 #endif
 #if !defined MPL_PRESSURE_LOW
     #define MPL_PRESSURE_LOW              (60)                   // Procenat popunjenosti do kog mora pasti zasicenje pre ponovnog povecanja.
@@ -225,6 +225,21 @@
 #endif
 #if MPM_MODEL_CACHE && (MPM_CACHE_MAX_MODELS < 64 || MPM_CACHE_MAX_MODELS > 32768)
     #error MapPulse: cache size must be between 64 and 32768
+#endif
+
+// ADAPTIVNO SMANJIVANJE RADIJUSA (v1.0.1)
+
+#if !defined MPL_ADAPTIVE_REDUCTION
+    #define MPL_ADAPTIVE_REDUCTION (1) // 1 = dozvoljava postepeno smanjenje samo u vozilu, u spoljasnjem svetu 0.
+#endif
+#if !defined MPL_REDUCTION_FLOOR
+    #define MPL_REDUCTION_FLOOR (85) // Najmanji radijus kao procenat originalnog (85 = 0.85 od baze).
+#endif
+#if !defined MPL_REDUCTION_STEP
+    #define MPL_REDUCTION_STEP (5) // Maksimalan korak kao procenat baze; 5 = 0.05 od baze.
+#endif
+#if MPL_ADAPTIVE_REDUCTION && (MPL_REDUCTION_FLOOR < 80 || MPL_REDUCTION_FLOOR >= 100 || MPL_REDUCTION_STEP < 1 || MPL_REDUCTION_STEP > 10 || MPL_REDUCTION_STEP > 100-MPL_REDUCTION_FLOOR)
+    #error MapPulse: invalid adaptive reduction settings
 #endif
 
 // ZASTITA MATERIJALA I OBJEKATA
