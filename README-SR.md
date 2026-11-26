@@ -6,7 +6,7 @@
 
 **Adaptivno učitavanje mapa i inteligentna prioritizacija objekata za SA-MP i open.mp.**
 
-![Verzija](https://img.shields.io/badge/version-1.0.2-blue)
+![Verzija](https://img.shields.io/badge/version-1.0.3-blue)
 ![Jezik](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Platforme](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse je lagana Pawn ekstenzija izgrađena na postojećem Incognito Streamer 
 
 Projekat je zasnovan na jednostavnom principu: **automatska optimizacija, bez potrebe da igrači ručno učitavaju mape.** MapPulse ne zamenjuje Streamer, već predstavlja dodatni sloj za upravljanje njegovim ponašanjem u postojećim gamemode skriptama.
 
-> **Status razvoja:** v1.0.2 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Ovo je testna verzija 1.0.2, ne potvrđeno stabilno izdanje. Pre produkcijske primene testirajte sistem na probnom serveru.
+> **Status razvoja:** v1.0.3 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Ovo je testna verzija 1.0.2, ne potvrđeno stabilno izdanje. Pre produkcijske primene testirajte sistem na probnom serveru.
 
 ## Sadržaj
 
@@ -272,6 +272,8 @@ Chunk streaming je opcion (MPL_CHUNK_STREAM=0). Kada je uključen, FS nakon jedn
 
 **Ispravka v1.0.2:** nativni HTTP poziv koristi tri promenljiva string niza zbog kompatibilnosti sa starijim `a_http.inc` potpisom. Upozorenje 239 se rešava u kodu, bez isključivanja upozorenja. Algoritam i dialog sistem ostaju isti kao u v1.0.1.
 
+**Ispravka v1.0.3:** MapPulse više ne uključuje `a_http.inc` direktno. Privatan Pawn alias poziva isti serverski HTTP native, nezavisno od redosleda legacy include-ova. Dva konstantna ternarna izraza u statistici zamenjena su `#if` granama (warning 206). Nema novih zavisnosti ni izmena algoritma ili dialog integracije.
+
 ## Podešavanja
 
 Sve opcije nalaze se u `include/mappulse_settings.inc`. Svaka korisnička DEFINE direktiva ima komentar na srpskom. Izmenite postojeće vrednosti i ponovo kompajlirajte odgovarajuće skripte. Podrazumevane vrednosti su konzervativna polazna tačka, a ne univerzalno optimalna konfiguracija.
@@ -408,7 +410,7 @@ Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarn
 
 ### Automatska provera verzije MapPulse-a
 
-MapPulse v1.0.2 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
+MapPulse v1.0.3 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
 
 | Define | Vrednost | Namena |
 |---|---|---|

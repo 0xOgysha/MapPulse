@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_live.inc | MapPulse v1.0.2
+ * mappulse_live.inc | MapPulse v1.0.3
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
 #if MPL_USE_PAWNCMD
     #include <Pawn.CMD>
 #endif
-#define MPL_BUILD_CODE (1000002)
+#define MPL_BUILD_CODE (1000003)
 new bool:MPL_Ready;
 new MPL_Active[MAX_PLAYERS], MPL_ActiveIndex[MAX_PLAYERS], MPL_ActiveCount;
 new MPL_SampleTotal, MPL_PollTotal, MPL_PollPeak, MPL_PollLimited;

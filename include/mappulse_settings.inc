@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_settings.inc | MapPulse v1.0.2
+ * mappulse_settings.inc | MapPulse v1.0.3
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -44,8 +44,8 @@
 
 // PROVERA VERZIJE MAPPULSE-A
 
-#define MPV_VERSION "1.0.2" // Verzija paketa; ne menjati rucno.
-#define MPV_VERSION_CODE (1000002) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_VERSION "1.0.3" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (1000003) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
 #define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
 
 #if !defined MPL_UPDATE_CHECK
@@ -319,7 +319,10 @@
     #if MPL_UPDATE_TRANSPORT == 2
         #include <requests>
     #else
-        #include <a_http>
+        // Use a private Pawn symbol for the existing server native.
+        // Legacy a_http.inc may lack an include guard; never include it again here.
+        native MPV_NativeHttp(index,type,url[],data[],callback[]) = HTTP;
+        #define MPV_HTTP_GET (1)
     #endif
 #endif
 
@@ -454,7 +457,7 @@ stock MPV_Start(const module[],compiledVersion)
             new httpUrl[]=MPL_UPDATE_URL;
             new httpData[1]={0};
             new httpCallback[]="MPV_HttpResponse";
-            if (!HTTP(8700,HTTP_GET,httpUrl,httpData,httpCallback))
+            if (!MPV_NativeHttp(8700,MPV_HTTP_GET,httpUrl,httpData,httpCallback))
                 MPV_HandleVersion(0,"");
         #endif
     #else

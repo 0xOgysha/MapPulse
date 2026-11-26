@@ -6,7 +6,7 @@
 
 **Adaptive map streaming and intelligent object prioritization for SA-MP and open.mp.**
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue)
+![Version](https://img.shields.io/badge/version-1.0.3-blue)
 ![Language](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Targets](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -15,7 +15,7 @@ MapPulse is a lightweight Pawn extension built on top of the Incognito Streamer 
 
 The project was designed around a simple principle: **optimize automatically, without requiring players to reload maps manually.** MapPulse is not a replacement for Streamer; it provides an additional policy layer for existing gamemodes.
 
-> **Development status:** v1.0.2 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. This is a 1.0.2 test candidate, not a verified stable release. Test on a staging server before production deployment.
+> **Development status:** v1.0.3 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. This is a 1.0.2 test candidate, not a verified stable release. Test on a staging server before production deployment.
 
 ## Contents
 
@@ -272,6 +272,8 @@ Chunk streaming is opt-in (MPL_CHUNK_STREAM=0). When enabled, after a single del
 
 **v1.0.2 fix:** the native HTTP call uses three mutable string arrays for compatibility with the legacy `a_http.inc` signature. Warning 239 is addressed in code, without disabling warnings. The algorithm and dialog system are unchanged from v1.0.1.
 
+**v1.0.3 fix:** MapPulse no longer directly includes `a_http.inc`. A private Pawn alias calls the same server HTTP native without relying on legacy include order. Two constant ternary expressions in cache metrics now use `#if` branches (warning 206). No new dependencies or algorithm/dialog changes.
+
 ## Configuration
 
 All options reside in `include/mappulse_settings.inc`. Each user-facing define has a Serbian explanatory comment. Edit the existing values and recompile the affected scripts. Defaults are conservative starting points, not universal optimal settings.
@@ -407,7 +409,7 @@ Pawn does not expose a dependable binary-version getter through these dependenci
 
 ### Automatic MapPulse version check
 
-MapPulse v1.0.2 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
+MapPulse v1.0.3 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
 
 | Define | Default | Purpose |
 |---|---|---|

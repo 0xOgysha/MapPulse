@@ -4,7 +4,7 @@
  * # # #  #####  ####   ####   #   #  #       ###   ####
  * #   #  #   #  #      #      #   #  #          #  #
  * #   #  #   #  #      #       ###   #####  ####   #####
- * mappulse_maps.inc | MapPulse v1.0.2
+ * mappulse_maps.inc | MapPulse v1.0.3
  * Created: 2026-11-26 | Author: 0xOgysha
  * Copyright (c) 2026 0xOgysha | MIT License
  * https://github.com/0xOgysha/MapPulse
@@ -20,7 +20,7 @@
     #define STREAMER_TAG_AREA _
 #endif
 #include <mappulse_settings>
-#define MPM_BUILD_CODE (1000002)
+#define MPM_BUILD_CODE (1000003)
 new MPM_Created, MPM_Prioritized, MPM_Trimmed;
 new bool:MPM_Started, bool:MPM_PolicyPaused;
 new MPM_MaterialRestored, MPM_MaterialConflicts, MPM_MaterialFailures, MPM_ProtectionSkipped;
@@ -135,14 +135,22 @@ public MPM_CacheMetric(metric)
         case 8: return MPM_Created;
         case 9: return MPM_Prioritized;
         case 10: return MPM_Trimmed;
-        case 11: return MPM_MODEL_CACHE ? MPM_CACHE_MAX_MODELS : 0;
+        #if MPM_MODEL_CACHE
+            case 11: return MPM_CACHE_MAX_MODELS;
+        #else
+            case 11: return 0;
+        #endif
         case 12: return MPM_GeometryInvalid;
         case 13: return MPM_MaterialRestored;
         case 14: return MPM_MaterialConflicts;
         case 15: return MPM_MaterialFailures;
         case 16: return MPM_ProtectionSkipped;
         case 17: return MPM_PROTECT_MATERIALS;
-        case 18: return MPM_PROTECT_MATERIALS ? MPM_PROTECTION_LIMIT*16 : 0;
+        #if MPM_PROTECT_MATERIALS
+            case 18: return MPM_PROTECTION_LIMIT*16;
+        #else
+            case 18: return 0;
+        #endif
     }
     return 0;
 }
