@@ -1,3 +1,15 @@
+/*
+ * #   #   ###   ####   ####   #   #  #       ####  #####
+ * ## ##  #   #  #   #  #   #  #   #  #      #      #
+ * # # #  #####  ####   ####   #   #  #       ###   ####
+ * #   #  #   #  #      #      #   #  #          #  #
+ * #   #  #   #  #      #       ###   #####  ####   #####
+ * mappulse_live.inc | MapPulse v0.8.0
+ * Created: 2026-11-26 | Author: 0xOgysha
+ * Copyright (c) 2026 0xOgysha | MIT License
+ * https://github.com/0xOgysha/MapPulse
+ */
+
 #if defined _mappulse_live_included
     #endinput
 #endif
@@ -8,6 +20,7 @@
 #if MPL_USE_PAWNCMD
     #include <Pawn.CMD>
 #endif
+#define MPL_BUILD_CODE (8000)
 new bool:MPL_Ready;
 new MPL_Active[MAX_PLAYERS], MPL_ActiveIndex[MAX_PLAYERS], MPL_ActiveCount;
 new MPL_SampleTotal, MPL_PollTotal, MPL_PollPeak, MPL_PollLimited;
@@ -106,21 +119,11 @@ stock bool:MPL_CheckDependencies()
 stock MPL_Init()
 {
     if (MPL_Timer) return 0;
-    #if MPL_PRINT_BANNER
-    print("----------------------------------------------------------");
-    print("#   #   ###   ####   ####   #   #  #       ####  #####");
-    print("## ##  #   #  #   #  #   #  #   #  #      #      #");
-    print("# # #  #####  ####   ####   #   #  #       ###   ####");
-    print("#   #  #   #  #      #      #   #  #          #  #");
-    print("#   #  #   #  #      #       ###   #####  ####   #####");
-    print("----------------------------------------------------------");
-    print(" MapPulse v0.7.3 | Automatic map streaming");
-    print(" Targets: SA-MP 0.3.7 / open.mp | Incognito Streamer");
+    MPV_Start("Filterscript",MPL_BUILD_CODE);
     #if !MPL_USE_PAWNCMD
-        print(" Command interface: native Pawn");
+        print("[MapPulse] Command interface: native Pawn");
     #else
-        print(" Command interface: Pawn.CMD");
-    #endif
+        print("[MapPulse] Command interface: Pawn.CMD");
     #endif
     MPL_Ready=MPL_CheckDependencies();
     if (!MPL_Ready)
@@ -140,6 +143,7 @@ stock MPL_Shutdown()
 {
     if (MPL_Timer) KillTimer(MPL_Timer);
     MPL_Timer=0;
+    MPV_Stop();
     MPL_Ready=false;
     for (new i=0;i<MPL_ActiveCount;i++) MPL_Restore(MPL_Active[i]);
     print("[MapPulse] Individual settings restored where owned; global map policy stays until maps are recreated/restart.");
@@ -298,7 +302,7 @@ stock MPL_Show(p,const title[],const body[])
     #if MPL_DIALOG_BRIDGE
         CallRemoteFunction("MapPulse_ShowReport","iss",p,title,body);
     #else
-        MPL_ReportOpen[p]=bool:ShowPlayerDialog(p,MPL_DIALOG_ID,DIALOG_STYLE_MSGBOX,title,body,"Zatvori","");
+        MPL_ReportOpen[p]=bool:ShowPlayerDialog(p,MPL_DIALOG_ID,DIALOG_STYLE_TABLIST_HEADERS,title,body,"Zatvori","");
     #endif
     return 1;
 }
@@ -308,20 +312,36 @@ stock MPL_Admin(p)
     if (!MPL_Ready) { SendClientMessage(p,MPL_COLOR,"[MP] Dependency check failed. Check server console and reload."); return 0; }
     return 1;
 }
-stock MPL_Append(p,slot,body[],size)
+stock MPL_ABCell(p,slot,metric,output[],size)
 {
-    new line[420], n=MPL_Samples[p][slot], label[24];
-    if (slot==0) format(label,sizeof label,"A - bazni radijus");
-    else format(label,sizeof label,"B - MapPulse LIVE");
-    if (!n) format(line,sizeof line,"{A9C4E4}%s{FFFFFF}: nema rezultata.\n\n",label);
-    else format(line,sizeof line,"{A9C4E4}%s{FFFFFF} | %d uzoraka\nProsek: %.1f | Vrh: %d | Limit: %d\nPopunjenost: %.1f%% | Pun kapacitet: %.1f%%\nRuta: %.0f m | Maks. brzina: %.0f km/h\nPromene radijusa: %d | Skokovi: %d\n\n",label,n,MPL_Mean[p][slot],MPL_Peak[p][slot],MPL_TestLimit[p][slot],MPL_Use[p][slot],100.0*float(MPL_Full[p][slot])/float(n),MPL_Route[p][slot],MPL_MaxSpeed[p][slot],MPL_TestChanges[p][slot],MPL_TestJumps[p][slot]);
-    strcat(body,line,size); return 1;
+    new n=MPL_Samples[p][slot];
+    if (!n) { format(output,size,"{B6C2D0}-"); return 1; }
+    switch (metric)
+    {
+        case 0: format(output,size,"%d",n);
+        case 1: format(output,size,"%.1f",MPL_Mean[p][slot]);
+        case 2: format(output,size,"%d",MPL_Peak[p][slot]);
+        case 3: format(output,size,"%d",MPL_TestLimit[p][slot]);
+        case 4: format(output,size,"%.1f%%",MPL_Use[p][slot]);
+        case 5: format(output,size,"%.1f%%",100.0*float(MPL_Full[p][slot])/float(n));
+        case 6: format(output,size,"%.0f m",MPL_Route[p][slot]);
+        case 7: format(output,size,"%.0f km/h",MPL_MaxSpeed[p][slot]);
+        case 8: format(output,size,"%d",MPL_TestChanges[p][slot]);
+        case 9: format(output,size,"%d",MPL_TestJumps[p][slot]);
+    }
+    return 1;
 }
 stock MPL_Compare(p,bool:save)
 {
-    new body[2200], line[350];
-    format(body,sizeof body,"{AAAAAA}A/B meri individualni rezim uz istu mapu.\n\n");
-    MPL_Append(p,0,body,sizeof body); MPL_Append(p,1,body,sizeof body);
+    new body[2200], line[240], left[40], right[40];
+    new const metrics[][]={"Uzorci","Prosek objekata","Maks. objekata","Limit","Popunjenost","Pun kapacitet","Duzina rute","Maks. brzina","Promene radijusa","Skokovi"};
+    format(body,sizeof body,"{73BFFF}Metrika\t{E8EDF4}A - Original\t{75D69C}B - MapPulse\n");
+    for (new i=0;i<sizeof metrics;i++)
+    {
+        MPL_ABCell(p,0,i,left,sizeof left); MPL_ABCell(p,1,i,right,sizeof right);
+        format(line,sizeof line,"{C0CCD9}%s\t{FFFFFF}%s\t{FFFFFF}%s\n",metrics[i],left,right);
+        strcat(body,line,sizeof body);
+    }
     new a=MPL_Samples[p][0], b=MPL_Samples[p][1];
     if (a && b)
     {
@@ -329,22 +349,22 @@ stock MPL_Compare(p,bool:save)
         new Float:dx=MPL_TestStartX[p][0]-MPL_TestStartX[p][1], Float:dy=MPL_TestStartY[p][0]-MPL_TestStartY[p][1];
         new Float:ex=MPL_TestEndX[p][0]-MPL_TestEndX[p][1], Float:ey=MPL_TestEndY[p][0]-MPL_TestEndY[p][1];
         new bool:comparable=(!MPL_Conflict[p] && a>=MPL_AB_MIN_SAMPLES && b>=MPL_AB_MIN_SAMPLES && floatabs(MPL_Route[p][1]-MPL_Route[p][0])<=MPL_Route[p][0]*MPL_AB_ROUTE_REL+MPL_AB_ROUTE_ABS && dx*dx+dy*dy<=MPL_AB_ENDPOINT_DISTANCE*MPL_AB_ENDPOINT_DISTANCE && ex*ex+ey*ey<=MPL_AB_ENDPOINT_DISTANCE*MPL_AB_ENDPOINT_DISTANCE && MPL_TestWorld[p][0]==MPL_TestWorld[p][1] && MPL_TestInterior[p][0]==MPL_TestInterior[p][1] && MPL_TestJumps[p][0]==0 && MPL_TestJumps[p][1]==0 && !MPL_TestLimitChanged[p][0] && !MPL_TestLimitChanged[p][1] && MPL_TestLimit[p][0]==MPL_TestLimit[p][1] && floatabs(MPL_MaxSpeed[p][0]-MPL_MaxSpeed[p][1])<=MPL_MaxSpeed[p][0]*MPL_AB_SPEED_REL+MPL_AB_SPEED_ABS);
-        format(line,sizeof line,"{A9C4E4}POREDJENJE B - A\n{FFFFFF}Pun kapacitet: %.1f p.p. | Popunjenost: %.1f p.p.\nProsek objekata: %.1f\n",delta,MPL_Use[p][1]-MPL_Use[p][0],MPL_Mean[p][1]-MPL_Mean[p][0]);
+        format(line,sizeof line,"{73BFFF}Razlika B - A\t{FFFFFF}%.1f p.p.\tPun kapacitet\n{73BFFF}Razlika B - A\t{FFFFFF}%.1f p.p.\tPopunjenost\n{73BFFF}Razlika B - A\t{FFFFFF}%.1f\tProsek objekata\n",delta,MPL_Use[p][1]-MPL_Use[p][0],MPL_Mean[p][1]-MPL_Mean[p][0]);
         strcat(body,line,sizeof body);
-        if (!comparable) strcat(body,"{FFD166}Testovi nisu dovoljno uporedivi.\n",sizeof body);
-        else if (delta < -MPL_AB_DELTA_PP) strcat(body,"{80E69A}MANJE ZASICENJE kapaciteta.\n",sizeof body);
-        else if (delta > MPL_AB_DELTA_PP) strcat(body,"{FF7777}VECE ZASICENJE kapaciteta.\n",sizeof body);
-        else strcat(body,"{FFD166}Bez bitne promene zasicenja.\n",sizeof body);
-        if (!MPL_TestChanges[p][1]) strcat(body,"{FFD166}B: nije bilo individualnih promena.\n",sizeof body);
+        if (!comparable) strcat(body,"{F6C85F}Uporedivost\tNe\tPonovi istu rutu\n",sizeof body);
+        else if (delta < -MPL_AB_DELTA_PP) strcat(body,"{75D69C}Rezultat\tManje zasicenje\tUporedivo\n",sizeof body);
+        else if (delta > MPL_AB_DELTA_PP) strcat(body,"{F08A8A}Rezultat\tVece zasicenje\tUporedivo\n",sizeof body);
+        else strcat(body,"{F6C85F}Rezultat\tBez bitne promene\tUporedivo\n",sizeof body);
+        if (!MPL_TestChanges[p][1]) strcat(body,"{F6C85F}Napomena\tB bez promena\tRadijus\n",sizeof body);
     }
-    else strcat(body,"{FFD166}Pokreni /mpbase i /mpon, svaki zavrsi sa /mpoff.\n",sizeof body);
-    strcat(body,"{AAAAAA}Zasicenje nije dokaz brzine renderovanja.",sizeof body);
+    else strcat(body,"{F6C85F}Testovi\t/mpbase i /mpon\tZavrsi /mpoff\n",sizeof body);
+    strcat(body,"{B6C2D0}Napomena\tZasicenje nije FPS\tIsta mapa\n",sizeof body);
     if (save && MPL_SAVE_RESULTS)
     {
         new File:f=fopen(MPL_RESULTS_FILE,io_append);
         if (f) { new stamp[90], y,m,d,h,mi,s; getdate(y,m,d); gettime(h,mi,s); format(stamp,sizeof stamp,"\r\n[%04d-%02d-%02d %02d:%02d:%02d] player=%d\r\n",y,m,d,h,mi,s,p); fwrite(f,stamp); fwrite(f,body); fwrite(f,"\r\n"); fclose(f); }
     }
-    MPL_Show(p,"MapPulse 0.7.3 AUTO | Poredjenje",body); return 1;
+    return MPL_Show(p,"{73BFFF}MapPulse {FFFFFF}| A/B Performance",body);
 }
 stock MPL_Begin(p,slot)
 {
@@ -381,13 +401,16 @@ stock MPL_Command_compare(playerid)
 stock MPL_Command_status(playerid)
 {
     if (!MPL_Admin(playerid)) return 1;
-    new body[1500], stats[256], Float:radius, Float:base;
+    new body[1800], line[350], update[48], Float:radius, Float:base;
     Streamer_GetRadiusMultiplier(STREAMER_TYPE_OBJECT,radius,playerid);
     base=MPL_Owned[playerid]?MPL_Base[playerid]:radius;
-    format(body,sizeof body,"{A9C4E4}INDIVIDUALNI STREAMING\n{FFFFFF}LIVE: %d | Test: %d | Konflikt: %d\nRadijus: %.2f | Bazni: %.2f\nBrzina: %.0f km/h\nObjekti: %d/%d | Zasicenje: %d\n\n{AAAAAA}Prioriteti se odredjuju pri kreiranju mapa u GM-u.\n/mpbase /mpon /mpoff /mpcompare\n/mpliveon /mpliveoff",MPL_Enabled,MPL_Test[playerid],MPL_Conflict[playerid],radius,base,floatsqroot(MPL_SpeedSq[playerid]),Streamer_CountVisibleItems(playerid,STREAMER_TYPE_OBJECT,1),Streamer_GetVisibleItems(STREAMER_TYPE_OBJECT,playerid),MPL_Pressure[playerid]);
-    format(stats,sizeof stats,"\n\n{A9C4E4}SCHEDULER{FFFFFF}\nIgraci: %d | Obrade: %d | Prolazi: %d\nVrh prolaza: %d ms | Dostignut budzet: %d",MPL_ActiveCount,MPL_SampleTotal,MPL_PollTotal,MPL_PollPeak,MPL_PollLimited);
-    strcat(body,stats,sizeof body);
-    return MPL_Show(playerid,"MapPulse 0.7.3 | Status",body);
+    MPV_Status(update,sizeof update);
+    format(body,sizeof body,"{73BFFF}Kategorija\t{73BFFF}Parametar\t{73BFFF}Vrednost\n{C0CCD9}Sistem\tVerzija\t{FFFFFF}%s\n{C0CCD9}Sistem\tAutor\t{FFFFFF}%s\n{C0CCD9}Sistem\tNadogradnja\t%s\n{C0CCD9}Sistem\tAutomatski rezim\t%s\n",MPV_VERSION,MPV_AUTHOR,update,MPL_Enabled?"{75D69C}AKTIVAN":"{F08A8A}ISKLJUCEN");
+    format(line,sizeof line,"{C0CCD9}Streaming\tRadijus / bazni\t{FFFFFF}%.2f / %.2f\n{C0CCD9}Streaming\tBrzina\t{FFFFFF}%.0f km/h\n{C0CCD9}Streaming\tObjekti / limit\t{FFFFFF}%d / %d\n{C0CCD9}Streaming\tZasicenje\t%s\n{C0CCD9}Streaming\tKonflikt\t%s\n{C0CCD9}Streaming\tA/B test\t{FFFFFF}%d\n",radius,base,floatsqroot(MPL_SpeedSq[playerid]),Streamer_CountVisibleItems(playerid,STREAMER_TYPE_OBJECT,1),Streamer_GetVisibleItems(STREAMER_TYPE_OBJECT,playerid),MPL_Pressure[playerid]?"{F6C85F}VISOKO":"{75D69C}NORMALNO",MPL_Conflict[playerid]?"{F08A8A}DA":"{75D69C}NE",MPL_Test[playerid]);
+    strcat(body,line,sizeof body);
+    format(line,sizeof line,"{C0CCD9}Scheduler\tIgraci\t{FFFFFF}%d\n{C0CCD9}Scheduler\tObrade\t{FFFFFF}%d\n{C0CCD9}Scheduler\tProlazi\t{FFFFFF}%d\n{C0CCD9}Scheduler\tNajduzi prolaz\t{FFFFFF}%d ms\n{C0CCD9}Scheduler\tDostignut budzet\t{FFFFFF}%d\n",MPL_ActiveCount,MPL_SampleTotal,MPL_PollTotal,MPL_PollPeak,MPL_PollLimited);
+    strcat(body,line,sizeof body);
+    return MPL_Show(playerid,"{73BFFF}MapPulse {FFFFFF}| Live Dashboard",body);
 }
 stock MPL_Command_liveoff(playerid)
 {

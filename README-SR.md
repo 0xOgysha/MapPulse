@@ -1,10 +1,12 @@
 # MapPulse
 
+**Autor:** [0xOgysha](https://github.com/0xOgysha) · Kreirano: 26.11.2026. · Copyright (c) 2026 0xOgysha
+
 [English](README.md) | **Srpski**
 
 **Adaptivno učitavanje mapa i inteligentna prioritizacija objekata za SA-MP i open.mp.**
 
-![Verzija](https://img.shields.io/badge/version-0.7.3-blue)
+![Verzija](https://img.shields.io/badge/version-0.8.0-blue)
 ![Jezik](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Platforme](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -13,7 +15,7 @@ MapPulse je lagana Pawn ekstenzija izgrađena na postojećem Incognito Streamer 
 
 Projekat je zasnovan na jednostavnom principu: **automatska optimizacija, bez potrebe da igrači ručno učitavaju mape.** MapPulse ne zamenjuje Streamer, već predstavlja dodatni sloj za upravljanje njegovim ponašanjem u postojećim gamemode skriptama.
 
-> **Status razvoja:** v0.7.3 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Pre produkcijske primene testirajte sistem na probnom serveru.
+> **Status razvoja:** v0.8.0 je eksperimentalno izdanje izvornog koda. Ciljne platforme su SA-MP 0.3.7 i open.mp; uspešno kompajliranje, kompatibilnost tokom rada i poboljšanja performansi još nisu potvrđeni na obe platforme. Pre produkcijske primene testirajte sistem na probnom serveru.
 
 ## Sadržaj
 
@@ -136,7 +138,7 @@ MapPulse podešavanja se kompajliraju u skripte; navedena serverska konfiguracij
 | `filterscripts/mappulse.pwn` | Ulazna tačka filterscripta, callbackovi životnog ciklusa, opcione nativne komande i odgovori na dialog |
 | `filterscripts/mappulse_live.inc` | Raspoređivanje igrača, procena kretanja, politika radijusa, dijagnostika, A/B testovi i komande |
 | `include/mappulse_maps.inc` | Funkcije za preusmeravanje kreiranja dinamičkih objekata, klasifikacija modela, politika kreiranja i brojači |
-| `include/mappulse_settings.inc` | Svih 54 korisnička DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
+| `include/mappulse_settings.inc` | Svih 60 korisnička DEFINE podešavanja, validacija pri kompajliranju i provera zavisnosti |
 
 ```mermaid
 flowchart TD
@@ -154,7 +156,7 @@ Dva modula se dopunjuju. Include upravlja parametrima odgovarajućih objekata pr
 
 ## Matematički pristup
 
-Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v0.7.3, a ne izmerene rezultate performansi.
+Pri razvoju MapPulse-a korišćene su jednostavne numeričke metode umesto skupih proračuna nad svakim objektom pri svakom ažuriranju igrača. Sledeće formule opisuju implementiranu politiku v0.8.0, a ne izmerene rezultate performansi.
 
 ### 1. Kvadrat euklidske udaljenosti i brzine
 
@@ -338,7 +340,7 @@ Sve komande zahtevaju RCON administratorski pristup preko `IsPlayerAdmin`. Namen
 | `/mpliveon` | Aktiviranje automatske individualne optimizacije za sve igrače |
 | `/mpliveoff` | Isključivanje individualne optimizacije, zaustavljanje testova i postepeno vraćanje radijusa kojim MapPulse upravlja |
 
-Podrazumevani izveštaj koristi nativni message-box dialog sa ID-jem `32740`. Rezervišite taj ID ili odaberite drugi slobodan ID. Ako gamemode ima centralizovani sistem dialoga, postavite `MPL_DIALOG_BRIDGE` na `1` i implementirajte javni callback `MapPulse_ShowReport(playerid, const title[], const body[])` u glavnoj skripti kroz postojeći autorizovani mehanizam dialoga. Callback se poziva preko `CallRemoteFunction`; potrebno ga je implementirati i testirati. Nemojte isključivati anti-cheat ili zaštitu dialoga radi korišćenja MapPulse-a.
+Podrazumevani izveštaj koristi nativni `DIALOG_STYLE_TABLIST_HEADERS` dialog sa ID-jem `32740`. Rezervišite taj ID ili odaberite drugi slobodan ID. Ako gamemode ima centralizovani sistem dialoga, postavite `MPL_DIALOG_BRIDGE` na `1` i implementirajte javni callback `MapPulse_ShowReport(playerid, const title[], const body[])` u glavnoj skripti kroz postojeći autorizovani mehanizam dialoga. Host callback mora koristiti `DIALOG_STYLE_TABLIST_HEADERS` za tabelarne redove i zaglavlja. Callback se poziva preko `CallRemoteFunction`; potrebno ga je implementirati i testirati. Nemojte isključivati anti-cheat ili zaštitu dialoga radi korišćenja MapPulse-a.
 
 Isključivanje individualne optimizacije ne poništava prioritete i udaljenosti dodeljene pri kreiranju objekata. Za vraćanje tih parametara isključite politiku mapa, ponovo kompajlirajte odgovarajuću skriptu i ponovo kreirajte mape ili restartujte server sa izmenjenom skriptom.
 
@@ -348,7 +350,22 @@ Filterscript proverava zavisnosti jednom pri inicijalizaciji i ispisuje podešen
 
 Ako nedostaje makro verzije obaveznog include fajla, MapPulse prijavljuje nepoznatu ili staru verziju umesto tvrdnje da je proverena. U strogom režimu neuspešna provera verzije sprečava odgovarajuću optimizaciju. Neuspešna Streamer API provera sprečava pokretanje individualne optimizacije bez obzira na strogi režim.
 
-Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarnog plugina. Proverite početne poruke samih plugina i upozorenja o nepodudaranju verzija; MapPulse ne vrši onlajn proveru novih izdanja. Ako nedostaju native funkcije, AMX može odbiti učitavanje pre izvršavanja početnog koda.
+Javni Pawn API ovih zavisnosti ne nudi pouzdan način očitavanja verzije binarnog plugina. Proverite početne poruke samih plugina i upozorenja o nepodudaranju verzija; Ova provera zavisnosti nije isto što i provera nove verzije MapPulse-a. Ako nedostaju native funkcije, AMX može odbiti učitavanje pre izvršavanja početnog koda.
+
+### Automatska provera verzije MapPulse-a
+
+MapPulse v0.8.0 proverava javni [VERSION](VERSION) fajl jednom po AMX skripti: FS pri učitavanju, map include pri prvom kreiranju objekta ili pozivu MPM_Init(). Ne treba ručno pozivati ovu funkciju osim ako želite ispis pre kreiranja mapa. Provera ne blokira optimizaciju i samo ispisuje upozorenje ako postoji novija verzija. Ne preuzima kod, ne šalje podatke o igračima i ne instalira ažuriranja. GitHub vidi uobičajene mrežne podatke zahteva.
+
+| Define | Vrednost | Namena |
+|---|---|---|
+| MPL_UPDATE_CHECK | 1 | 0 isključuje proveru |
+| MPL_UPDATE_TRANSPORT | 1 | 1 nativni HTTP; 2 opcioni pawn-requests HTTPS |
+| MPL_UPDATE_URL | GitHub VERSION URL | Adresa za nativni HTTP; open.mp include bira HTTPS |
+| MPL_UPDATE_HOST | https://raw.githubusercontent.com | HTTPS host za pawn-requests |
+| MPL_UPDATE_PATH | /0xOgysha/MapPulse/main/VERSION | Putanja za pawn-requests |
+| MPL_UPDATE_TIMEOUT_MS | 15000 | Vremenski rok za odgovor |
+
+Na klasičnom SA-MP-u nativni HTTP ne podržava pouzdano HTTPS/redirect; ako provera ne uspe, instalirajte kompatibilan [pawn-requests](https://github.com/Southclaws/pawn-requests) plugin i include (API Request iz serije 0.11.x) i postavite MPL_UPDATE_TRANSPORT na 2, ili koristite sopstveni HTTP mirror. Na open.mp-u sa starim SA-MP headerima ručno postavite MPL_UPDATE_URL na HTTPS URL. Opcioni plugin zahteva odgovarajuću binarnu verziju i include. Nedostupnost mreže ne zaustavlja MapPulse. Pri objavi nove verzije ažurirajte VERSION i verzijske konstante svih modula. Sve izvorne fajlove zamenite zajedno i ponovo kompajlirajte.
 
 ## Testiranje performansi
 
@@ -363,7 +380,7 @@ Izveštaj obuhvata broj uzoraka, prosečan/maksimalan broj vidljivih objekata, p
 
 Ugrađeno A/B poređenje izoluje individualnu politiku radijusa **uz istu politiku kreiranja mapa u oba testa**. Za procenu prioriteta i skraćivanja udaljenosti pri kreiranju, izvršite testove na odvojeno kompajliranim verzijama sa isključenim i uključenim `MPM_ENABLE`, uz ponovno kreiranje istih mapa između testova.
 
-Za v0.7.3 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
+Za v0.8.0 nije objavljen potvrđen procenat poboljšanja FPS-a ili opterećenja CPU-a. Manja zasićenost ne znači nužno bolji vizuelni kvalitet ili brže iscrtavanje. Prijavite nedostajuće objekte, naglo pojavljivanje objekata, skokove vremena iscrtavanja frejmova i trajanje serverske obrade, pored same popunjenosti.
 
 ## Ograničenja i rešavanje problema
 

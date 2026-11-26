@@ -1,10 +1,12 @@
 # MapPulse
 
+**Author:** [0xOgysha](https://github.com/0xOgysha) · Created: 2026-11-26 · Copyright (c) 2026 0xOgysha
+
 **English** | [Srpski](README-SR.md)
 
 **Adaptive map streaming and intelligent object prioritization for SA-MP and open.mp.**
 
-![Version](https://img.shields.io/badge/version-0.7.3-blue)
+![Version](https://img.shields.io/badge/version-0.8.0-blue)
 ![Language](https://img.shields.io/badge/language-Pawn-E4A42E)
 ![Targets](https://img.shields.io/badge/targets-SA--MP%20%7C%20open.mp-32936F)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
@@ -13,7 +15,7 @@ MapPulse is a lightweight Pawn extension built on top of the Incognito Streamer 
 
 The project was designed around a simple principle: **optimize automatically, without requiring players to reload maps manually.** MapPulse is not a replacement for Streamer; it provides an additional policy layer for existing gamemodes.
 
-> **Development status:** v0.7.3 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. Test on a staging server before production deployment.
+> **Development status:** v0.8.0 is an experimental source release. SA-MP 0.3.7 and open.mp are intended targets; successful compilation, runtime compatibility and performance improvements have not yet been verified on both platforms. Test on a staging server before production deployment.
 
 ## Contents
 
@@ -136,7 +138,7 @@ MapPulse settings are compiled into the scripts; the server configuration above 
 | `filterscripts/mappulse.pwn` | Filterscript entry point, lifecycle callbacks, optional native command dispatch and dialog responses |
 | `filterscripts/mappulse_live.inc` | Player scheduler, movement estimation, radius policy, diagnostics, A/B tests and commands |
 | `include/mappulse_maps.inc` | Dynamic object wrappers, model classification, creation policy and counters |
-| `include/mappulse_settings.inc` | All 54 user-configurable defines, compile-time validation and dependency checks |
+| `include/mappulse_settings.inc` | All 60 user-configurable defines, compile-time validation and dependency checks |
 
 ```mermaid
 flowchart TD
@@ -154,7 +156,7 @@ The two modules complement each other. The include controls eligible object para
 
 ## Mathematical approach
 
-MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v0.7.3 policy, not measured performance results.
+MapPulse uses simple numerical methods rather than performing expensive per-object calculations on each player update. The formulas below describe the implemented v0.8.0 policy, not measured performance results.
 
 ### 1. Squared Euclidean distance and speed
 
@@ -337,7 +339,7 @@ All commands require RCON administrator access through `IsPlayerAdmin`. They are
 | `/mpliveon` | Enable automatic individual optimization for all players |
 | `/mpliveoff` | Disable individual optimization, stop active tests and gradually restore owned radius settings |
 
-The default report uses a native message-box dialog with ID `32740`. Reserve this ID or select another unused ID. If your gamemode has a centralized dialog manager, set `MPL_DIALOG_BRIDGE` to `1` and implement the public callback `MapPulse_ShowReport(playerid, const title[], const body[])` in the host script using its existing authorized dialog mechanism. The callback is invoked through `CallRemoteFunction`; the host must implement and test it. Do not disable anti-cheat or dialog safeguards to accommodate MapPulse.
+The default report uses a native `DIALOG_STYLE_TABLIST_HEADERS` dialog with ID `32740`. Reserve this ID or select another unused ID. If your gamemode has a centralized dialog manager, set `MPL_DIALOG_BRIDGE` to `1` and implement the public callback `MapPulse_ShowReport(playerid, const title[], const body[])` in the host script using its existing authorized dialog mechanism. The host callback must render the supplied tab-separated rows with `DIALOG_STYLE_TABLIST_HEADERS`. The callback is invoked through `CallRemoteFunction`; the host must implement and test it. Do not disable anti-cheat or dialog safeguards to accommodate MapPulse.
 
 Disabling the live optimizer does not undo creation-time object priorities or distances. To revert those, disable the map policy, recompile the affected script and recreate its maps or restart the server with the modified script.
 
@@ -347,7 +349,22 @@ The filterscript checks dependencies once at initialization and prints the confi
 
 If the required header version macro is missing, MapPulse reports an unknown/old version rather than claiming verification. In strict mode, a failed header check prevents the corresponding optimization from running. A failed Streamer API probe prevents the individual optimizer from starting regardless of strict mode.
 
-Pawn does not expose a dependable binary-version getter through these dependencies' public APIs. Check the plugins' own startup banners and mismatch warnings; the MapPulse check is not an online update checker. Missing natives can prevent the AMX from loading before its startup code executes.
+Pawn does not expose a dependable binary-version getter through these dependencies' public APIs. Check the plugins' own startup banners and mismatch warnings; dependency checks are separate from the MapPulse online version check. Missing natives can prevent the AMX from loading before its startup code executes.
+
+### Automatic MapPulse version check
+
+MapPulse v0.8.0 checks the public [VERSION](VERSION) file once per AMX: the filterscript at load and the map include at first object creation or MPM_Init(). Calling MPM_Init() is optional if you want the banner before any map creation. This is a non-blocking, warning-only check; it never downloads executable code, sends player data or installs updates. GitHub receives ordinary network request metadata.
+
+| Define | Default | Purpose |
+|---|---|---|
+| MPL_UPDATE_CHECK | 1 | 0 disables online checks |
+| MPL_UPDATE_TRANSPORT | 1 | 1 native HTTP; 2 optional pawn-requests HTTPS |
+| MPL_UPDATE_URL | GitHub VERSION URL | Native HTTP endpoint; open.mp headers select HTTPS |
+| MPL_UPDATE_HOST | https://raw.githubusercontent.com | HTTPS host for pawn-requests |
+| MPL_UPDATE_PATH | /0xOgysha/MapPulse/main/VERSION | Path for pawn-requests |
+| MPL_UPDATE_TIMEOUT_MS | 15000 | Response timeout |
+
+Legacy SA-MP HTTP does not reliably support HTTPS/redirects. If checking fails, install a compatible [pawn-requests](https://github.com/Southclaws/pawn-requests) binary and include (0.11.x Request API) and select MPL_UPDATE_TRANSPORT=2, or use your own HTTP mirror. On open.mp compiled with old SA-MP headers, explicitly set MPL_UPDATE_URL to the HTTPS endpoint. The optional plugin requires matching binaries and includes. Network failures do not disable optimization. When publishing an update, change VERSION and all module version constants. Replace all source files together and recompile.
 
 ## Benchmarking
 
@@ -362,7 +379,7 @@ The report includes sample count, mean/peak visible objects, configured limit, o
 
 The built-in A/B comparison isolates the individual radius policy **with the same creation-time map policy in both runs**. To evaluate creation-time priorities and distance trimming, run separate server builds with `MPM_ENABLE` disabled and enabled, recreating the same maps between tests.
 
-No verified FPS or CPU improvement percentage is published for v0.7.3. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
+No verified FPS or CPU improvement percentage is published for v0.8.0. Lower saturation does not necessarily mean better visual quality or faster rendering. Report missing objects, pop-in, frame-time spikes and scheduler timings as well as occupancy.
 
 ## Limitations and troubleshooting
 

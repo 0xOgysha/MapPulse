@@ -1,3 +1,15 @@
+/*
+ * #   #   ###   ####   ####   #   #  #       ####  #####
+ * ## ##  #   #  #   #  #   #  #   #  #      #      #
+ * # # #  #####  ####   ####   #   #  #       ###   ####
+ * #   #  #   #  #      #      #   #  #          #  #
+ * #   #  #   #  #      #       ###   #####  ####   #####
+ * mappulse_settings.inc | MapPulse v0.8.0
+ * Created: 2026-11-26 | Author: 0xOgysha
+ * Copyright (c) 2026 0xOgysha | MIT License
+ * https://github.com/0xOgysha/MapPulse
+ */
+
 #if defined _mappulse_settings_included
     #endinput
 #endif
@@ -28,6 +40,38 @@
 #endif
 #if !defined MPL_RESULTS_FILE
     #define MPL_RESULTS_FILE              "mappulse_performance_results.log" // Naziv log fajla u scriptfiles folderu.
+#endif
+
+// PROVERA VERZIJE MAPPULSE-A
+
+#define MPV_VERSION "0.8.0" // Verzija paketa; ne menjati rucno.
+#define MPV_VERSION_CODE (8000) // major * 1000000 + minor * 1000 + patch; ne menjati rucno.
+#define MPV_AUTHOR "0xOgysha" // Autor projekta; ne menjati rucno.
+
+#if !defined MPL_UPDATE_CHECK
+    #define MPL_UPDATE_CHECK (1) // 1 = jedna automatska provera verzije po AMX skripti.
+#endif
+#if !defined MPL_UPDATE_TRANSPORT
+    #define MPL_UPDATE_TRANSPORT (1) // 1 = nativni HTTP, 2 = HTTPS preko pawn-requests plugina.
+#endif
+#if !defined MPL_UPDATE_URL
+    #if defined _INC_open_mp
+        #define MPL_UPDATE_URL "https://raw.githubusercontent.com/0xOgysha/MapPulse/main/VERSION" // HTTPS na open.mp.
+    #else
+        #define MPL_UPDATE_URL "raw.githubusercontent.com/0xOgysha/MapPulse/main/VERSION" // HTTP na SA-MP; za HTTPS koristi transport 2.
+    #endif
+#endif
+#if !defined MPL_UPDATE_HOST
+    #define MPL_UPDATE_HOST "https://raw.githubusercontent.com" // HTTPS host za opcioni pawn-requests transport.
+#endif
+#if !defined MPL_UPDATE_PATH
+    #define MPL_UPDATE_PATH "/0xOgysha/MapPulse/main/VERSION" // Putanja javnog VERSION fajla za HTTPS transport.
+#endif
+#if !defined MPL_UPDATE_TIMEOUT_MS
+    #define MPL_UPDATE_TIMEOUT_MS (15000) // Rok za odgovor (ms); ne blokira optimizaciju.
+#endif
+#if MPL_UPDATE_CHECK && (MPL_UPDATE_TRANSPORT < 1 || MPL_UPDATE_TRANSPORT > 2 || MPL_UPDATE_TIMEOUT_MS < 1000)
+    #error MapPulse: invalid update check settings
 #endif
 
 // PROVERA ZAVISNOSTI
@@ -208,7 +252,171 @@
 
 #include <streamer>
 
+#if MPL_UPDATE_CHECK
+    #if MPL_UPDATE_TRANSPORT == 2
+        #include <requests>
+    #else
+        #include <a_http>
+    #endif
+#endif
+
 new MPD_StreamerStatus;
+new bool:MPV_Started;
+new MPV_State, MPV_LocalCode, MPV_Module[24];
+
+stock MPV_Banner(const module[])
+{
+    #if MPL_PRINT_BANNER
+        print("----------------------------------------------------------");
+        print("#   #   ###   ####   ####   #   #  #       ####  #####");
+        print("## ##  #   #  #   #  #   #  #   #  #      #      #");
+        print("# # #  #####  ####   ####   #   #  #       ###   ####");
+        print("#   #  #   #  #      #      #   #  #          #  #");
+        print("#   #  #   #  #      #       ###   #####  ####   #####");
+        print("----------------------------------------------------------");
+    #endif
+    printf("[MapPulse] %s | v%s | Author: %s",module,MPV_VERSION,MPV_AUTHOR);
+    print("[MapPulse] Created: 2026-11-26 | Copyright (c) 2026 0xOgysha | MIT");
+    return 1;
+}
+
+stock MPV_ParseVersion(const data[])
+{
+    new parts[3], part, digits, i, c;
+    while (data[i]==' ' || data[i]==9) { if (++i>16) return -1; }
+    for (; (c=data[i])!=0; i++)
+    {
+        if (i>24) return -1;
+        if (c>='0' && c<='9')
+        {
+            if (++digits>3) return -1;
+            parts[part]=parts[part]*10+c-'0';
+        }
+        else if (c=='.')
+        {
+            if (!digits || part>=2) return -1;
+            part++; digits=0;
+        }
+        else if (c==' ' || c==9 || c==10 || c==13)
+        {
+            while (data[i]==' ' || data[i]==9 || data[i]==10 || data[i]==13)
+                { if (++i>24) return -1; }
+            if (data[i]) return -1;
+            break;
+        }
+        else return -1;
+    }
+    if (part!=2 || !digits) return -1;
+    return parts[0]*1000000+parts[1]*1000+parts[2];
+}
+
+#if MPL_UPDATE_CHECK
+new MPV_Timer;
+forward MPV_UpdateTimeout();
+public MPV_UpdateTimeout()
+{
+    MPV_Timer=0;
+    if (MPV_State==1)
+    {
+        MPV_State=4;
+        printf("[MapPulse][WARNING] %s version check timed out; optimization continues.",MPV_Module);
+    }
+    return 1;
+}
+stock MPV_HandleVersion(status,const data[])
+{
+    if (MPV_State!=1) return 1;
+    if (MPV_Timer) { KillTimer(MPV_Timer); MPV_Timer=0; }
+    if (status!=200)
+    {
+        MPV_State=4;
+        printf("[MapPulse][WARNING] %s version check unavailable (HTTP %d). Check GitHub manually.",MPV_Module,status);
+        return 1;
+    }
+    new remote=MPV_ParseVersion(data);
+    if (remote<0)
+    {
+        MPV_State=4;
+        print("[MapPulse][WARNING] Invalid VERSION response; check GitHub manually.");
+        return 1;
+    }
+    if (remote>MPV_LocalCode)
+    {
+        MPV_State=3;
+        printf("[MapPulse][WARNING] %s: NEW VERSION %d.%d.%d available (installed %d.%d.%d).",MPV_Module,remote/1000000,(remote/1000)%1000,remote%1000,MPV_LocalCode/1000000,(MPV_LocalCode/1000)%1000,MPV_LocalCode%1000);
+        print("[MapPulse][WARNING] Update all MapPulse .inc/.pwn files, recompile and restart.");
+        print("[MapPulse] https://github.com/0xOgysha/MapPulse");
+    }
+    else
+    {
+        MPV_State=2;
+        printf("[MapPulse][OK] %s: no newer published version detected.",MPV_Module);
+    }
+    return 1;
+}
+#if MPL_UPDATE_TRANSPORT == 2
+    forward MPV_RequestResponse(Request:id,E_HTTP_STATUS:status,data[],dataLen);
+    public MPV_RequestResponse(Request:id,E_HTTP_STATUS:status,data[],dataLen)
+    {
+        #pragma unused id, dataLen
+        return MPV_HandleVersion(_:status,data);
+    }
+#else
+    forward MPV_HttpResponse(index,response_code,data[]);
+    public MPV_HttpResponse(index,response_code,data[])
+    {
+        if (index!=8700) return 1;
+        return MPV_HandleVersion(_:response_code,data);
+    }
+#endif
+#endif
+
+stock MPV_Start(const module[],compiledVersion)
+{
+    if (MPV_Started) return 1;
+    MPV_Started=true;
+    format(MPV_Module,sizeof MPV_Module,"%s",module);
+    MPV_LocalCode=compiledVersion<MPV_VERSION_CODE?compiledVersion:MPV_VERSION_CODE;
+    MPV_Banner(module);
+    if (compiledVersion!=MPV_VERSION_CODE)
+        print("[MapPulse][WARNING] Local module/settings versions differ; install matching files and recompile.");
+    #if MPL_UPDATE_CHECK
+        MPV_State=1;
+        MPV_Timer=SetTimer("MPV_UpdateTimeout",MPL_UPDATE_TIMEOUT_MS,false);
+        #if MPL_UPDATE_TRANSPORT == 2
+            new RequestsClient:client=RequestsClient(MPL_UPDATE_HOST);
+            Request(client,MPL_UPDATE_PATH,HTTP_METHOD_GET,"MPV_RequestResponse");
+        #else
+            if (!HTTP(8700,HTTP_GET,MPL_UPDATE_URL,"","MPV_HttpResponse"))
+                MPV_HandleVersion(0,"");
+        #endif
+    #else
+        MPV_State=0;
+        print("[MapPulse] Online version check disabled.");
+    #endif
+    return 1;
+}
+
+stock MPV_Stop()
+{
+    #if MPL_UPDATE_CHECK
+        if (MPV_Timer) { KillTimer(MPV_Timer); MPV_Timer=0; }
+        if (MPV_State==1) MPV_State=4;
+    #endif
+    return 1;
+}
+stock MPV_Status(output[],size)
+{
+    switch (MPV_State)
+    {
+        case 1: format(output,size,"{F6C85F}Provera u toku");
+        case 2: format(output,size,"{75D69C}Nema novije");
+        case 3: format(output,size,"{F6C85F}Dostupna nadogradnja");
+        case 4: format(output,size,"{F6C85F}Provera nedostupna");
+        default: format(output,size,"{B6C2D0}Iskljuceno");
+    }
+    return 1;
+}
 
 stock MPD_CheckStreamer()
 {

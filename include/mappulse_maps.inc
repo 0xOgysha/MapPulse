@@ -1,3 +1,15 @@
+/*
+ * #   #   ###   ####   ####   #   #  #       ####  #####
+ * ## ##  #   #  #   #  #   #  #   #  #      #      #
+ * # # #  #####  ####   ####   #   #  #       ###   ####
+ * #   #  #   #  #      #      #   #  #          #  #
+ * #   #  #   #  #      #       ###   #####  ####   #####
+ * mappulse_maps.inc | MapPulse v0.8.0
+ * Created: 2026-11-26 | Author: 0xOgysha
+ * Copyright (c) 2026 0xOgysha | MIT License
+ * https://github.com/0xOgysha/MapPulse
+ */
+
 #if defined _mappulse_maps_included
     #endinput
 #endif
@@ -8,7 +20,19 @@
     #define STREAMER_TAG_AREA _
 #endif
 #include <mappulse_settings>
+#define MPM_BUILD_CODE (8000)
 new MPM_Created, MPM_Prioritized, MPM_Trimmed;
+new bool:MPM_Started;
+stock MPM_Init()
+{
+    if (!MPM_Started)
+    {
+        MPM_Started=true;
+        MPV_Start("Map include",MPM_BUILD_CODE);
+        MPD_CheckStreamer();
+    }
+    return 1;
+}
 stock MPM_Apply(modelid, &priority, &Float:sd, Float:dd)
 {
     if (!MPM_ENABLE || priority != 0 || sd <= 0.0) return 0;
@@ -43,6 +67,7 @@ stock MPM_Record(STREAMER_TAG_OBJECT:id, change)
 }
 stock STREAMER_TAG_OBJECT:MPM_Create(modelid, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, worldid=-1, interiorid=-1, playerid=-1, Float:streamdistance=STREAMER_OBJECT_SD, Float:drawdistance=STREAMER_OBJECT_DD, STREAMER_TAG_AREA:areaid=STREAMER_TAG_AREA:-1, priority=0)
 {
+    if (!MPM_Started) MPM_Init();
     new change;
     new bool:allowPolicy=MPD_AllowMapPolicy();
     if (allowPolicy && (worldid==0 || worldid==-1) && (interiorid==0 || interiorid==-1) && playerid==-1 && areaid==STREAMER_TAG_AREA:-1)
@@ -53,6 +78,7 @@ stock STREAMER_TAG_OBJECT:MPM_Create(modelid, Float:x, Float:y, Float:z, Float:r
 }
 stock STREAMER_TAG_OBJECT:MPM_CreateEx(modelid, Float:x, Float:y, Float:z, Float:rx, Float:ry, Float:rz, Float:streamdistance=STREAMER_OBJECT_SD, Float:drawdistance=STREAMER_OBJECT_DD, const worlds[]={-1}, const interiors[]={-1}, const players[]={-1}, const STREAMER_TAG_AREA:areas[]={STREAMER_TAG_AREA:-1}, priority=0, maxworlds=sizeof worlds, maxinteriors=sizeof interiors, maxplayers=sizeof players, maxareas=sizeof areas)
 {
+    if (!MPM_Started) MPM_Init();
     new change;
     new bool:allowPolicy=MPD_AllowMapPolicy();
 
@@ -67,17 +93,8 @@ stock STREAMER_TAG_OBJECT:MPM_CreateEx(modelid, Float:x, Float:y, Float:z, Float
 }
 stock MPM_PrintStats()
 {
-    MPD_CheckStreamer();
-    #if MPL_PRINT_BANNER
-    print("----------------------------------------------------------");
-    print("#   #   ###   ####   ####   #   #  #       ####  #####");
-    print("## ##  #   #  #   #  #   #  #   #  #      #      #");
-    print("# # #  #####  ####   ####   #   #  #       ###   ####");
-    print("#   #  #   #  #      #      #   #  #          #  #");
-    print("#   #  #   #  #      #       ###   #####  ####   #####");
-    print("----------------------------------------------------------");
-    #endif
-    printf("[MapPulse v0.7.3 | Map include] Created=%d priority=%d decor=%d",MPM_Created,MPM_Prioritized,MPM_Trimmed);
+    MPM_Init();
+    printf("[MapPulse | Map include] Author: %s | Created=%d priority=%d decor=%d",MPV_AUTHOR,MPM_Created,MPM_Prioritized,MPM_Trimmed);
     return 1;
 }
 
